@@ -76,6 +76,94 @@ export function getSafeWorkspacePath(
 }
 
 /**
+ * Config keys whose values are filesystem paths written to by the engine.
+ * These must stay inside the project directory: audit_log and session_dir are
+ * consumed by file_chat.py, which resolves them relative to its own cwd, so an
+ * unvalidated value lets a config write place files anywhere on disk.
+ */
+export const PATH_CONFIG_KEYS = ["audit_log", "session_dir"] as const;
+
+/** Keys the server accepts on POST /api/config. Anything else is dropped. */
+export const ALLOWED_CONFIG_KEYS = [
+  "model",
+  "ollama_url",
+  "provider",
+  "temperature",
+  "top_k",
+  "chunk_size",
+  "chunk_overlap",
+  "git_enabled",
+  "audit_log",
+  "session_dir",
+  "watchdog_auto_index",
+  "watch_debounce_ms",
+  "retrieval_mode",
+] as const;
+
+/**
+ * True when a config path value stays inside baseDir once resolved.
+ * Rejects absolute paths, parent traversal, URL-encoded escapes and null bytes.
+ */
+export function isSafeConfigPath(value: unknown, baseDir: string = process.cwd()): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (value.includes("\0")) return false;
+
+  let decoded = value;
+  try {
+    while (decoded.includes("%")) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
+  } catch {
+    return false;
+  }
+  if (decoded.includes("\0")) return false;
+
+  decoded = decoded.replace(/\\/g, "/");
+  if (path.isAbsolute(decoded) || /^[a-zA-Z]:/.test(decoded)) return false;
+
+  const base = path.resolve(baseDir);
+  const resolved = path.resolve(base, decoded);
+  return resolved !== base && resolved.startsWith(base + path.sep);
+}
+
+/**
+ * Validates an incoming config payload. Unknown keys are dropped rather than
+ * persisted, and path-valued keys must resolve inside baseDir.
+ * Returns the sanitized config, or an error naming the offending key.
+ */
+export function validateConfigPayload(
+  payload: unknown,
+  baseDir: string = process.cwd()
+): { ok: true; config: Record<string, unknown> } | { ok: false; error: string } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, error: "Config must be a JSON object" };
+  }
+
+  const incoming = payload as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const key of Object.keys(incoming)) {
+    if (!(ALLOWED_CONFIG_KEYS as readonly string[]).includes(key)) {
+      continue; // drop unknown keys instead of persisting them
+    }
+    const value = incoming[key];
+    if ((PATH_CONFIG_KEYS as readonly string[]).includes(key)) {
+      if (!isSafeConfigPath(value, baseDir)) {
+        return {
+          ok: false,
+          error: `Config key '${key}' must be a relative path inside the project directory`,
+        };
+      }
+    }
+    sanitized[key] = value;
+  }
+
+  return { ok: true, config: sanitized };
+}
+
+/**
  * Parses natural language replacement instructions like:
  *   replace <target> with <replacement> [optional trailing text]
  * Handles quoted strings, embedded "with", trailing text, and unquoted strings.
