@@ -5,6 +5,7 @@ import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import { assertInsideWorkspace, getSafeWorkspacePath } from "./src/utils/security";
 
 dotenv.config();
 
@@ -19,38 +20,7 @@ if (!fs.existsSync(WORKSPACE_DIR)) {
   fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
 }
 
-/**
- * Validates and resolves a file path strictly within WORKSPACE_DIR.
- * Prevents directory traversal, CWD escapes, and symlink escapes.
- */
-export function getSafeWorkspacePath(relPath: string): string | null {
-  if (!relPath || typeof relPath !== "string") return null;
-  // Reject null-byte injection
-  if (relPath.includes("\0")) return null;
-
-  const normalizedWorkspace = path.resolve(WORKSPACE_DIR);
-  const safePath = path.resolve(WORKSPACE_DIR, relPath);
-
-  // Must strictly be inside WORKSPACE_DIR or equal to WORKSPACE_DIR
-  if (!safePath.startsWith(normalizedWorkspace + path.sep) && safePath !== normalizedWorkspace) {
-    return null;
-  }
-
-  // If path exists, check realpath to prevent symlink traversal outside workspace
-  if (fs.existsSync(safePath)) {
-    try {
-      const realPath = fs.realpathSync(safePath);
-      const realWorkspace = fs.realpathSync(normalizedWorkspace);
-      if (!realPath.startsWith(realWorkspace + path.sep) && realPath !== realWorkspace) {
-        return null;
-      }
-    } catch {
-      return null;
-    }
-  }
-
-  return safePath;
-}
+export { assertInsideWorkspace, getSafeWorkspacePath };
 
 app.use(express.json({ limit: "20mb" }));
 
@@ -440,7 +410,20 @@ app.post("/api/edit/batch", async (req, res) => {
   const { instruction, files, dry_run } = req.body;
   if (!instruction) return res.status(400).json({ error: "Instruction required" });
 
-  const targetFiles: string[] = files && files.length > 0 ? files : fs.readdirSync(WORKSPACE_DIR).filter((f) => !f.startsWith("."));
+  let targetFiles: string[] = [];
+  if (files && Array.isArray(files) && files.length > 0) {
+    // Validate that every specified file is within workspace
+    for (const f of files) {
+      const safe = getSafeWorkspacePath(f);
+      if (!safe) {
+        return res.status(403).json({ error: "Access denied: file outside workspace" });
+      }
+      targetFiles.push(f);
+    }
+  } else {
+    targetFiles = fs.readdirSync(WORKSPACE_DIR).filter((f) => !f.startsWith("."));
+  }
+
   const results = [];
 
   for (const f of targetFiles) {
@@ -488,12 +471,20 @@ app.post("/api/terminal/exec", async (req, res) => {
   } else if (cmdTrim.startsWith(":edit ")) {
     const parts = cmdTrim.slice(6).trim().split(" ");
     const f = parts[0];
+    const safe = getSafeWorkspacePath(f);
+    if (!safe) {
+      return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
+    }
     const instr = parts.slice(1).join(" ");
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim.startsWith(":dry-run ")) {
     const parts = cmdTrim.slice(9).trim().split(" ");
     const f = parts[0];
+    const safe = getSafeWorkspacePath(f);
+    if (!safe) {
+      return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
+    }
     const instr = parts.slice(1).join(" ");
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr, "--dry-run"]);
     return res.json({ output: out.stdout || out.stderr });

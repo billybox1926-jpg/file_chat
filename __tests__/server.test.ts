@@ -159,6 +159,64 @@ describe("Workspace Directory Traversal & Security Tests", () => {
     assert.equal(data.error, "Access denied");
   });
 
+  test("POST /api/edit/apply rejects customContent overwrite of server.ts or package.json with 403", async () => {
+    const res1 = await fetch(`${baseUrl}/api/edit/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: "../server.ts", customContent: "corrupted" }),
+    });
+    assert.equal(res1.status, 403);
+
+    const res2 = await fetch(`${baseUrl}/api/edit/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: "../../package.json", customContent: "corrupted" }),
+    });
+    assert.equal(res2.status, 403);
+  });
+
+  test("POST /api/edit/batch rejects batch overwrite with escaping files array with 403", async () => {
+    const res1 = await fetch(`${baseUrl}/api/edit/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instruction: "replace x with y",
+        files: ["../../package.json"],
+        dry_run: false,
+      }),
+    });
+    assert.equal(res1.status, 403);
+    const data1 = (await res1.json()) as { error: string };
+    assert.match(data1.error, /Access denied/);
+
+    const res2 = await fetch(`${baseUrl}/api/edit/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instruction: "replace a with b",
+        files: [testFileName, "../server.ts"],
+        dry_run: true,
+      }),
+    });
+    assert.equal(res2.status, 403);
+  });
+
+  test("POST /api/terminal/exec rejects :edit or :dry-run commands escaping workspace with 403", async () => {
+    const res1 = await fetch(`${baseUrl}/api/terminal/exec`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: ":edit ../server.ts replace const with let" }),
+    });
+    assert.equal(res1.status, 403);
+
+    const res2 = await fetch(`${baseUrl}/api/terminal/exec`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: ":dry-run ../../etc/passwd add user" }),
+    });
+    assert.equal(res2.status, 403);
+  });
+
   test("Unit test: getSafeWorkspacePath function validation", () => {
     // Escapes
     assert.equal(getSafeWorkspacePath("../.env"), null);

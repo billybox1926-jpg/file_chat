@@ -172,6 +172,17 @@ class TestFileChat(unittest.TestCase):
         self.assertEqual(len(events_received), 2)
         self.assertEqual(len(engine.file_chunk_map), 0)
 
+    def test_workspace_isolation_traversal_rejection(self):
+        cli = FileChatCLI(target_dir=self.test_dir)
+        # Attempt to edit a file outside target_dir
+        res = cli.execute_edit("../../package.json", "replace x with y", dry_run=False)
+        self.assertFalse(res["success"])
+        self.assertIn("Access denied", res["error"])
+
+        res_dry = cli.execute_edit("/etc/passwd", "modify content", dry_run=True)
+        self.assertFalse(res_dry["success"])
+        self.assertIn("Access denied", res_dry["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

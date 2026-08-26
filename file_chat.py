@@ -731,11 +731,25 @@ class FileChatCLI:
         """Generates a diff based on instruction and applies or previews it."""
         # Check direct path first, then relative to target_dir
         if os.path.isabs(file_path):
-            abs_path = file_path
-        elif os.path.exists(os.path.abspath(file_path)):
             abs_path = os.path.abspath(file_path)
         else:
             abs_path = os.path.abspath(os.path.join(self.target_dir, file_path))
+
+        # Enforce workspace isolation / prevent directory traversal
+        try:
+            common = os.path.commonpath([self.target_dir, abs_path])
+            if common != self.target_dir:
+                return {
+                    "success": False,
+                    "error": f"Access denied: file '{file_path}' escapes target workspace '{self.target_dir}'",
+                    "diff": ""
+                }
+        except Exception:
+            return {
+                "success": False,
+                "error": f"Access denied: invalid file path '{file_path}'",
+                "diff": ""
+            }
 
         if not os.path.exists(abs_path):
             return {"success": False, "error": f"File '{file_path}' does not exist (searched {abs_path})"}
