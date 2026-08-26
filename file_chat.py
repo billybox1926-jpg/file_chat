@@ -435,6 +435,10 @@ class PollingWatchdog:
         return not self._stop_event.is_set() if self.thread and self.thread.is_alive() else False
 
     def start(self):
+        # Idempotent: a second start() while already running is a no-op, so
+        # repeated calls cannot spawn redundant polling threads.
+        if self.thread is not None and self.thread.is_alive():
+            return
         self._stop_event.clear()
         with self._lock:
             self.last_snapshot = self._scan()
