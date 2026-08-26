@@ -5,7 +5,7 @@ import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
-import { assertInsideWorkspace, getSafeWorkspacePath } from "./src/utils/security";
+import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction } from "./src/utils/security";
 
 dotenv.config();
 
@@ -434,9 +434,9 @@ app.post("/api/edit/batch", async (req, res) => {
     let newContent = originalContent;
 
     // Apply smart transformation or replacement
-    const replaceMatch = instruction.match(/replace\s+['"]?(.+?)['"]?\s+with\s+['"]?(.+?)['"]?$/i);
+    const replaceMatch = parseReplaceInstruction(instruction);
     if (replaceMatch) {
-      newContent = originalContent.replaceAll(replaceMatch[1], replaceMatch[2]);
+      newContent = originalContent.replaceAll(replaceMatch[0], replaceMatch[1]);
     } else {
       newContent = `# [Batch updated: ${instruction}]\n` + originalContent;
     }

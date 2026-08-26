@@ -2,7 +2,7 @@ import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "fs";
 import path from "path";
-import { assertInsideWorkspace, getSafeWorkspacePath } from "../src/utils/security";
+import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction } from "../src/utils/security";
 
 describe("Security Unit Tests - assertInsideWorkspace Utility", () => {
   const testWorkspaceDir = path.resolve(process.cwd(), "test_workspace_sandbox");
@@ -180,6 +180,28 @@ describe("Security Unit Tests - assertInsideWorkspace Utility", () => {
       assert.equal(getSafeWorkspacePath("..%2f.env", testWorkspaceDir), null);
       assert.equal(getSafeWorkspacePath("%2e%2e%2fetc%2fpasswd", testWorkspaceDir), null);
       assert.equal(getSafeWorkspacePath("doc.md\0.exe", testWorkspaceDir), null);
+    });
+  });
+
+  describe("Replacement Instruction Parser Tests", () => {
+    test("parses target with embedded 'with' correctly", () => {
+      const res = parseReplaceInstruction("replace 'username with password' with 'credentials'");
+      assert.deepEqual(res, ["username with password", "credentials"]);
+    });
+
+    test("parses words containing with like 'width' correctly", () => {
+      const res = parseReplaceInstruction("replace 'width' with 'height'");
+      assert.deepEqual(res, ["width", "height"]);
+    });
+
+    test("handles trailing instructions and comments cleanly", () => {
+      const res = parseReplaceInstruction("replace 'a' with 'b' and add comment");
+      assert.deepEqual(res, ["a", "b"]);
+    });
+
+    test("handles unquoted bare words", () => {
+      const res = parseReplaceInstruction("replace width with height");
+      assert.deepEqual(res, ["width", "height"]);
     });
   });
 });

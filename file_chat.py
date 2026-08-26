@@ -425,18 +425,26 @@ class PollingWatchdog:
         self.directory = directory
         self.handler = handler
         self.interval = interval
-        self.running = False
-        self.thread = None
-        self.last_snapshot = {}
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self.thread: Optional[threading.Thread] = None
+        self.last_snapshot: Dict[str, float] = {}
+
+    @property
+    def running(self) -> bool:
+        return not self._stop_event.is_set() if self.thread and self.thread.is_alive() else False
 
     def start(self):
-        self.running = True
-        self.last_snapshot = self._scan()
+        self._stop_event.clear()
+        with self._lock:
+            self.last_snapshot = self._scan()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
     def stop(self):
-        self.running = False
+        self._stop_event.set()
+        if self.thread and self.thread.is_alive() and threading.current_thread() != self.thread:
+            self.thread.join(timeout=1.0)
 
     def _scan(self) -> Dict[str, float]:
         res = {}
@@ -452,23 +460,26 @@ class PollingWatchdog:
         return res
 
     def _run(self):
-        while self.running:
-            time.sleep(self.interval)
+        while not self._stop_event.is_set():
+            if self._stop_event.wait(self.interval):
+                break
             current = self._scan()
             
+            with self._lock:
+                previous = self.last_snapshot.copy()
+                self.last_snapshot = current
+
             # Check for additions and modifications
             for p, mtime in current.items():
-                if p not in self.last_snapshot:
+                if p not in previous:
                     self.handler.handle_event("created", p)
-                elif mtime > self.last_snapshot[p]:
+                elif mtime > previous.get(p, 0):
                     self.handler.handle_event("modified", p)
 
             # Check for deletions
-            for p in self.last_snapshot:
+            for p in previous:
                 if p not in current:
                     self.handler.handle_event("deleted", p)
-
-            self.last_snapshot = current
 
 
 # =====================================================================
@@ -689,6 +700,79 @@ class AIProvider:
 # Main FileChat CLI & REPL Controller
 # =====================================================================
 
+def parse_replace_instruction(instruction: str) -> Optional[Tuple[str, str]]:
+    """
+    Parses a replacement instruction of the form:
+      replace <target> with <replacement> [optional trailing text]
+    Uses robust string splitting and quote extraction (non-regex method)
+    to handle target strings containing the word 'with', quotes, and trailing text.
+    """
+    if not instruction or not isinstance(instruction, str):
+        return None
+    instr = instruction.strip()
+    if not instr.lower().startswith("replace "):
+        return None
+
+    rest = instr[8:].strip()
+    if not rest:
+        return None
+
+    target = ""
+    after_target = ""
+
+    # Check if target is enclosed in quotes (' or ")
+    if rest.startswith("'") or rest.startswith('"'):
+        quote_char = rest[0]
+        closing_quote = rest.find(quote_char, 1)
+        if closing_quote != -1:
+            target = rest[1:closing_quote]
+            after_target = rest[closing_quote + 1:].strip()
+        else:
+            return None
+    else:
+        # Non-quoted target: find the separator keyword " with "
+        lower_rest = rest.lower()
+        with_idx = lower_rest.find(" with ")
+        if with_idx == -1:
+            return None
+        target = rest[:with_idx].strip().strip("'\"")
+        after_target = rest[with_idx:].strip()
+
+    # Verify after_target starts with 'with' keyword
+    if not after_target.lower().startswith("with"):
+        return None
+
+    after_with = after_target[4:].strip()
+    if not after_with:
+        return None
+
+    replacement = ""
+    # Check if replacement is quoted
+    if after_with.startswith("'") or after_with.startswith('"'):
+        q = after_with[0]
+        end_q = after_with.find(q, 1)
+        if end_q != -1:
+            replacement = after_with[1:end_q]
+        else:
+            replacement = after_with[1:]
+    else:
+        # Non-quoted replacement: strip out trailing conjunctions/notes
+        tokens = after_with.split()
+        clean_tokens = []
+        for token in tokens:
+            if token.lower() in ("and", "then", "where"):
+                break
+            clean_tokens.append(token)
+        if clean_tokens:
+            replacement = " ".join(clean_tokens).strip().strip("'\"")
+        else:
+            replacement = after_with.strip().strip("'\"")
+
+    if target:
+        return target, replacement
+    return None
+
+
 class FileChatCLI:
     def __init__(self, target_dir: str = ".", config_path: str = "config.json"):
         self.target_dir = os.path.abspath(target_dir)
@@ -825,14 +909,12 @@ class FileChatCLI:
 
     def _generate_revised_content(self, original: str, instruction: str, prompt: str, retrieved_context: List[Dict[str, Any]]) -> str:
         """Applies prompt rules or regex/replacement heuristics."""
-        # Simple heuristic find-and-replace support
-        if "replace" in instruction.lower() and "with" in instruction.lower():
-            match = re.search(r"replace\s+['\"]?(.+?)['\"]?\s+with\s+['\"]?(.+?)['\"]?$", instruction, re.IGNORECASE)
-            if match:
-                target = match.group(1)
-                replacement = match.group(2)
-                if target in original:
-                    return original.replace(target, replacement)
+        # Robust heuristic find-and-replace support
+        parsed_replace = parse_replace_instruction(instruction)
+        if parsed_replace:
+            target, replacement = parsed_replace
+            if target in original:
+                return original.replace(target, replacement)
 
         # Append or comment instruction heuristic if offline
         lines = original.splitlines()

@@ -74,3 +74,59 @@ export function getSafeWorkspacePath(
     return null;
   }
 }
+
+/**
+ * Parses natural language replacement instructions like:
+ *   replace <target> with <replacement> [optional trailing text]
+ * Handles quoted strings, embedded "with", trailing text, and unquoted strings.
+ */
+export function parseReplaceInstruction(instruction: string): [string, string] | null {
+  if (!instruction || typeof instruction !== "string") return null;
+  const instr = instruction.trim();
+  if (!/^replace\b/i.test(instr)) return null;
+
+  const rest = instr.slice(7).trim();
+
+  // Case 1: Quoted target
+  if (rest.startsWith("'") || rest.startsWith('"')) {
+    const q = rest[0];
+    const endIdx = rest.indexOf(q, 1);
+    if (endIdx !== -1) {
+      const target = rest.slice(1, endIdx);
+      const afterTarget = rest.slice(endIdx + 1).trim();
+      const withMatch = afterTarget.match(/^with\b\s*/i);
+      if (withMatch) {
+        const afterWith = afterTarget.slice(withMatch[0].length).trim();
+        if (afterWith.startsWith("'") || afterWith.startsWith('"')) {
+          const rq = afterWith[0];
+          const rendIdx = afterWith.indexOf(rq, 1);
+          const replacement = rendIdx !== -1 ? afterWith.slice(1, rendIdx) : afterWith.slice(1);
+          return [target, replacement];
+        } else {
+          const parts = afterWith.split(/\s+(?:and|in|on|to)\s+/i);
+          return [target, parts[0].trim().replace(/^['"]|['"]$/g, "")];
+        }
+      }
+    }
+  }
+
+  // Case 2: Unquoted target
+  const withMatch = rest.match(/\bwith\b/i);
+  if (withMatch && withMatch.index !== undefined) {
+    const target = rest.slice(0, withMatch.index).trim().replace(/^['"]|['"]$/g, "");
+    if (!target) return null;
+    const afterWith = rest.slice(withMatch.index + withMatch[0].length).trim();
+    if (afterWith.startsWith("'") || afterWith.startsWith('"')) {
+      const rq = afterWith[0];
+      const rendIdx = afterWith.indexOf(rq, 1);
+      const replacement = rendIdx !== -1 ? afterWith.slice(1, rendIdx) : afterWith.slice(1);
+      return [target, replacement];
+    } else {
+      const parts = afterWith.split(/\s+(?:and|in|on|to)\s+/i);
+      return [target, parts[0].trim().replace(/^['"]|['"]$/g, "")];
+    }
+  }
+
+  return null;
+}
+
