@@ -19,6 +19,39 @@ if (!fs.existsSync(WORKSPACE_DIR)) {
   fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
 }
 
+/**
+ * Validates and resolves a file path strictly within WORKSPACE_DIR.
+ * Prevents directory traversal, CWD escapes, and symlink escapes.
+ */
+export function getSafeWorkspacePath(relPath: string): string | null {
+  if (!relPath || typeof relPath !== "string") return null;
+  // Reject null-byte injection
+  if (relPath.includes("\0")) return null;
+
+  const normalizedWorkspace = path.resolve(WORKSPACE_DIR);
+  const safePath = path.resolve(WORKSPACE_DIR, relPath);
+
+  // Must strictly be inside WORKSPACE_DIR or equal to WORKSPACE_DIR
+  if (!safePath.startsWith(normalizedWorkspace + path.sep) && safePath !== normalizedWorkspace) {
+    return null;
+  }
+
+  // If path exists, check realpath to prevent symlink traversal outside workspace
+  if (fs.existsSync(safePath)) {
+    try {
+      const realPath = fs.realpathSync(safePath);
+      const realWorkspace = fs.realpathSync(normalizedWorkspace);
+      if (!realPath.startsWith(realWorkspace + path.sep) && realPath !== realWorkspace) {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return safePath;
+}
+
 app.use(express.json({ limit: "20mb" }));
 
 // Lazy/Safe Gemini SDK initialization
@@ -49,26 +82,28 @@ interface WatchEvent {
 const watchdogEvents: WatchEvent[] = [];
 
 // Watch workspace_docs for live events
-try {
-  fs.watch(WORKSPACE_DIR, { recursive: true }, (eventType, filename) => {
-    if (!filename || filename.startsWith(".")) return;
-    const fullPath = path.join(WORKSPACE_DIR, filename);
-    const exists = fs.existsSync(fullPath);
-    const resolvedType = !exists ? "deleted" : eventType === "rename" ? "created" : "modified";
-    
-    const event: WatchEvent = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      timestamp: new Date().toLocaleTimeString(),
-      type: resolvedType,
-      filename,
-      path: fullPath,
-      details: exists ? `Size: ${fs.statSync(fullPath).size} bytes` : "File removed",
-    };
-    watchdogEvents.unshift(event);
-    if (watchdogEvents.length > 100) watchdogEvents.pop();
-  });
-} catch (e) {
-  console.log("Watch error:", e);
+if (process.env.NODE_ENV !== "test") {
+  try {
+    fs.watch(WORKSPACE_DIR, { recursive: true }, (eventType, filename) => {
+      if (!filename || filename.startsWith(".")) return;
+      const fullPath = path.join(WORKSPACE_DIR, filename);
+      const exists = fs.existsSync(fullPath);
+      const resolvedType = !exists ? "deleted" : eventType === "rename" ? "created" : "modified";
+      
+      const event: WatchEvent = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: resolvedType,
+        filename,
+        path: fullPath,
+        details: exists ? `Size: ${fs.statSync(fullPath).size} bytes` : "File removed",
+      };
+      watchdogEvents.unshift(event);
+      if (watchdogEvents.length > 100) watchdogEvents.pop();
+    });
+  } catch (e) {
+    console.log("Watch error:", e);
+  }
 }
 
 // Helper: run python script with args
@@ -172,12 +207,16 @@ app.get("/api/files", (_req, res) => {
 app.get("/api/files/content", (req, res) => {
   try {
     const rel = (req.query.path as string) || "";
-    const safePath = path.resolve(WORKSPACE_DIR, rel);
-    if (!safePath.startsWith(WORKSPACE_DIR) && !safePath.startsWith(process.cwd())) {
+    const safePath = getSafeWorkspacePath(rel);
+    if (!safePath) {
       return res.status(403).json({ error: "Access denied" });
     }
     if (!fs.existsSync(safePath)) {
       return res.status(404).json({ error: "File not found" });
+    }
+    const stat = fs.statSync(safePath);
+    if (stat.isDirectory()) {
+      return res.status(400).json({ error: "Cannot read directory as file" });
     }
     const content = fs.readFileSync(safePath, "utf-8");
     res.json({ content, path: rel });
@@ -191,7 +230,10 @@ app.post("/api/files/save", (req, res) => {
   try {
     const { path: rel, content } = req.body;
     if (!rel) return res.status(400).json({ error: "Path required" });
-    const target = path.resolve(WORKSPACE_DIR, rel);
+    const target = getSafeWorkspacePath(rel);
+    if (!target) {
+      return res.status(403).json({ error: "Access denied" });
+    }
     const parentDir = path.dirname(target);
     if (!fs.existsSync(parentDir)) {
       fs.mkdirSync(parentDir, { recursive: true });
@@ -207,7 +249,11 @@ app.post("/api/files/save", (req, res) => {
 app.delete("/api/files/delete", (req, res) => {
   try {
     const rel = (req.query.path as string) || "";
-    const target = path.resolve(WORKSPACE_DIR, rel);
+    if (!rel) return res.status(400).json({ error: "Path required" });
+    const target = getSafeWorkspacePath(rel);
+    if (!target) {
+      return res.status(403).json({ error: "Access denied" });
+    }
     if (fs.existsSync(target)) {
       fs.unlinkSync(target);
     }
@@ -281,11 +327,15 @@ app.post("/api/edit/preview", async (req, res) => {
     return res.status(400).json({ error: "File and instruction required" });
   }
 
+  const safePath = getSafeWorkspacePath(file);
+  if (!safePath) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
   // Attempt using Gemini directly for smart code generation if key is present
-  const fullPath = path.resolve(WORKSPACE_DIR, file);
-  if (fs.existsSync(fullPath) && process.env.GEMINI_API_KEY) {
+  if (fs.existsSync(safePath) && process.env.GEMINI_API_KEY) {
     try {
-      const originalContent = fs.readFileSync(fullPath, "utf-8");
+      const originalContent = fs.readFileSync(safePath, "utf-8");
       const ai = getAI();
       if (ai) {
         const aiResp = await ai.models.generateContent({
@@ -346,17 +396,19 @@ app.post("/api/edit/apply", async (req, res) => {
   const { file, instruction, customContent } = req.body;
   if (!file) return res.status(400).json({ error: "File required" });
 
-  const fullPath = path.resolve(WORKSPACE_DIR, file);
+  const safePath = getSafeWorkspacePath(file);
+  if (!safePath) {
+    return res.status(403).json({ error: "Access denied" });
+  }
   
-  if (customContent !== undefined && fs.existsSync(fullPath)) {
-    const original = fs.readFileSync(fullPath, "utf-8");
-    fs.writeFileSync(fullPath, customContent, "utf-8");
+  if (customContent !== undefined && fs.existsSync(safePath)) {
+    fs.writeFileSync(safePath, customContent, "utf-8");
     
     // Log to audit
     const auditEntry = {
       timestamp: new Date().toISOString(),
       action: "apply_edit",
-      file: fullPath,
+      file: safePath,
       details: { instruction: instruction || "Visual apply", size: customContent.length },
     };
     fs.appendFileSync(AUDIT_LOG_PATH, JSON.stringify(auditEntry) + "\n", "utf-8");
@@ -392,8 +444,8 @@ app.post("/api/edit/batch", async (req, res) => {
   const results = [];
 
   for (const f of targetFiles) {
-    const full = path.resolve(WORKSPACE_DIR, f);
-    if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
+    const full = getSafeWorkspacePath(f);
+    if (!full || !fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
 
     const originalContent = fs.readFileSync(full, "utf-8");
     let newContent = originalContent;
@@ -539,4 +591,8 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
+
+export { app, WORKSPACE_DIR };
