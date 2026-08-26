@@ -5,7 +5,7 @@ import { spawn, spawnSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
-import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction } from "./src/utils/security";
+import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction, validateConfigPayload } from "./src/utils/security";
 
 dotenv.config();
 
@@ -163,9 +163,25 @@ app.get("/api/config", (_req, res) => {
 
 app.post("/api/config", (req, res) => {
   try {
-    const newConfig = req.body;
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2), "utf-8");
-    res.json({ success: true, config: newConfig });
+    const validated = validateConfigPayload(req.body, process.cwd());
+    if (validated.ok !== true) {
+      return res.status(400).json({ success: false, error: validated.error });
+    }
+
+    // Merge over the existing config so a partial POST cannot silently wipe
+    // unrelated keys.
+    let existing: Record<string, unknown> = {};
+    if (fs.existsSync(CONFIG_PATH)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+      } catch {
+        existing = {};
+      }
+    }
+
+    const merged = { ...existing, ...validated.config };
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");
+    res.json({ success: true, config: merged });
   } catch (e: any) {
     res.status(500).json({ success: false, error: e.message });
   }
