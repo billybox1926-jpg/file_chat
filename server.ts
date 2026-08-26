@@ -84,6 +84,16 @@ function runPythonCommand(args: string[]): Promise<{ stdout: string; stderr: str
   });
 }
 
+// Helper: assert resolved path is strictly inside WORKSPACE_DIR
+function assertInsideWorkspace(target: string): { ok: boolean; error?: string } {
+  const resolved = path.resolve(target);
+  const ws = path.resolve(WORKSPACE_DIR);
+  if (resolved === ws || resolved.startsWith(ws + path.sep)) {
+    return { ok: true };
+  }
+  return { ok: false, error: "Access denied: path escapes workspace" };
+}
+
 // ==========================================
 // API Endpoints
 // ==========================================
@@ -173,8 +183,9 @@ app.get("/api/files/content", (req, res) => {
   try {
     const rel = (req.query.path as string) || "";
     const safePath = path.resolve(WORKSPACE_DIR, rel);
-    if (!safePath.startsWith(WORKSPACE_DIR) && !safePath.startsWith(process.cwd())) {
-      return res.status(403).json({ error: "Access denied" });
+    const guard = assertInsideWorkspace(safePath);
+    if (!guard.ok) {
+      return res.status(403).json({ error: guard.error });
     }
     if (!fs.existsSync(safePath)) {
       return res.status(404).json({ error: "File not found" });
@@ -192,6 +203,10 @@ app.post("/api/files/save", (req, res) => {
     const { path: rel, content } = req.body;
     if (!rel) return res.status(400).json({ error: "Path required" });
     const target = path.resolve(WORKSPACE_DIR, rel);
+    const guard = assertInsideWorkspace(target);
+    if (!guard.ok) {
+      return res.status(403).json({ error: guard.error });
+    }
     const parentDir = path.dirname(target);
     if (!fs.existsSync(parentDir)) {
       fs.mkdirSync(parentDir, { recursive: true });
@@ -208,6 +223,10 @@ app.delete("/api/files/delete", (req, res) => {
   try {
     const rel = (req.query.path as string) || "";
     const target = path.resolve(WORKSPACE_DIR, rel);
+    const guard = assertInsideWorkspace(target);
+    if (!guard.ok) {
+      return res.status(403).json({ error: guard.error });
+    }
     if (fs.existsSync(target)) {
       fs.unlinkSync(target);
     }
@@ -283,6 +302,10 @@ app.post("/api/edit/preview", async (req, res) => {
 
   // Attempt using Gemini directly for smart code generation if key is present
   const fullPath = path.resolve(WORKSPACE_DIR, file);
+  const guard = assertInsideWorkspace(fullPath);
+  if (!guard.ok) {
+    return res.status(403).json({ error: guard.error });
+  }
   if (fs.existsSync(fullPath) && process.env.GEMINI_API_KEY) {
     try {
       const originalContent = fs.readFileSync(fullPath, "utf-8");
@@ -347,7 +370,11 @@ app.post("/api/edit/apply", async (req, res) => {
   if (!file) return res.status(400).json({ error: "File required" });
 
   const fullPath = path.resolve(WORKSPACE_DIR, file);
-  
+  const guard = assertInsideWorkspace(fullPath);
+  if (!guard.ok) {
+    return res.status(403).json({ error: guard.error });
+  }
+
   if (customContent !== undefined && fs.existsSync(fullPath)) {
     const original = fs.readFileSync(fullPath, "utf-8");
     fs.writeFileSync(fullPath, customContent, "utf-8");
@@ -393,6 +420,8 @@ app.post("/api/edit/batch", async (req, res) => {
 
   for (const f of targetFiles) {
     const full = path.resolve(WORKSPACE_DIR, f);
+    const guard = assertInsideWorkspace(full);
+    if (!guard.ok) continue;
     if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) continue;
 
     const originalContent = fs.readFileSync(full, "utf-8");
@@ -437,12 +466,18 @@ app.post("/api/terminal/exec", async (req, res) => {
     const parts = cmdTrim.slice(6).trim().split(" ");
     const f = parts[0];
     const instr = parts.slice(1).join(" ");
+    const fullCheck = path.resolve(WORKSPACE_DIR, f);
+    const guard = assertInsideWorkspace(fullCheck);
+    if (!guard.ok) return res.json({ output: guard.error });
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim.startsWith(":dry-run ")) {
     const parts = cmdTrim.slice(9).trim().split(" ");
     const f = parts[0];
     const instr = parts.slice(1).join(" ");
+    const fullCheck = path.resolve(WORKSPACE_DIR, f);
+    const guard = assertInsideWorkspace(fullCheck);
+    if (!guard.ok) return res.json({ output: guard.error });
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr, "--dry-run"]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim === ":docs") {
