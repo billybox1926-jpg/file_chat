@@ -89,16 +89,6 @@ function runPythonCommand(args: string[]): Promise<{ stdout: string; stderr: str
   });
 }
 
-// Helper: assert resolved path is strictly inside WORKSPACE_DIR
-function assertInsideWorkspace(target: string): { ok: boolean; error?: string } {
-  const resolved = path.resolve(target);
-  const ws = path.resolve(WORKSPACE_DIR);
-  if (resolved === ws || resolved.startsWith(ws + path.sep)) {
-    return { ok: true };
-  }
-  return { ok: false, error: "Access denied: path escapes workspace" };
-}
-
 // ==========================================
 // API Endpoints
 // ==========================================
@@ -486,9 +476,6 @@ app.post("/api/terminal/exec", async (req, res) => {
       return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
     }
     const instr = parts.slice(1).join(" ");
-    const fullCheck = path.resolve(WORKSPACE_DIR, f);
-    const guard = assertInsideWorkspace(fullCheck);
-    if (!guard.ok) return res.json({ output: guard.error });
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim.startsWith(":dry-run ")) {
@@ -499,9 +486,6 @@ app.post("/api/terminal/exec", async (req, res) => {
       return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
     }
     const instr = parts.slice(1).join(" ");
-    const fullCheck = path.resolve(WORKSPACE_DIR, f);
-    const guard = assertInsideWorkspace(fullCheck);
-    if (!guard.ok) return res.json({ output: guard.error });
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr, "--dry-run"]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim === ":docs") {
