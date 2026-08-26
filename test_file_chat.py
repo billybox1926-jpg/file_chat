@@ -320,6 +320,72 @@ class TestFileChat(unittest.TestCase):
         finally:
             shutil.rmtree(watch_dir, ignore_errors=True)
 
+    def test_polling_watchdog_no_event_loss_under_concurrency(self):
+        """Every concurrently created file must be reported exactly once (no dropped events)."""
+        watch_dir = tempfile.mkdtemp(prefix="watchdog_loss_")
+        try:
+            created = set()
+            lock = threading.Lock()
+
+            def on_change(entry, msg):
+                if entry.get("type") == "created":
+                    with lock:
+                        created.add(entry.get("path"))
+
+            handler = DocumentWatchHandler(
+                IncrementalRetrievalEngine(), on_change_callback=on_change
+            )
+            watchdog = PollingWatchdog(watch_dir, handler, interval=0.05)
+            watchdog.start()
+
+            n_workers, n_files = 4, 10
+
+            def worker(wid):
+                for i in range(n_files):
+                    with open(os.path.join(watch_dir, f"w{wid}_{i}.txt"), "w", encoding="utf-8") as f:
+                        f.write("payload")
+                    time.sleep(0.01)
+
+            threads = [threading.Thread(target=worker, args=(w,)) for w in range(n_workers)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            time.sleep(0.6)
+            watchdog.stop()
+
+            on_disk = {os.path.join(watch_dir, f) for f in os.listdir(watch_dir)}
+            self.assertEqual(len(on_disk), n_workers * n_files)
+            # No file may go unreported — this is the regression the race caused.
+            self.assertEqual(on_disk - created, set())
+        finally:
+            shutil.rmtree(watch_dir, ignore_errors=True)
+
+    def test_polling_watchdog_start_is_idempotent(self):
+        """Repeated start() must not spawn redundant polling threads."""
+        watch_dir = tempfile.mkdtemp(prefix="watchdog_idem_")
+        try:
+            handler = DocumentWatchHandler(IncrementalRetrievalEngine())
+            watchdog = PollingWatchdog(watch_dir, handler, interval=0.05)
+
+            baseline = threading.active_count()
+            for _ in range(4):
+                watchdog.start()
+            time.sleep(0.1)
+            self.assertEqual(threading.active_count() - baseline, 1)
+
+            first_thread = watchdog.thread
+            watchdog.start()
+            self.assertIs(watchdog.thread, first_thread)
+
+            watchdog.stop()
+            time.sleep(0.2)
+            self.assertFalse(watchdog.running)
+            self.assertFalse(first_thread.is_alive())
+        finally:
+            shutil.rmtree(watch_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

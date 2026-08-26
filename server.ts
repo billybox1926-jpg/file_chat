@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
@@ -76,16 +76,47 @@ if (process.env.NODE_ENV !== "test") {
   }
 }
 
+// Resolve the Python interpreter once at startup.
+// PYTHON_CMD overrides everything. Otherwise probe candidates and pick the
+// first that actually runs, because the available name varies by platform:
+// python.org Windows installers ship python.exe / py.exe but no python3.exe,
+// while most Linux/macOS distros ship python3 and may have no bare `python`.
+const PYTHON_CANDIDATES = process.platform === "win32"
+  ? ["python", "py", "python3"]
+  : ["python3", "python"];
+
+function detectPythonCmd(): string {
+  if (process.env.PYTHON_CMD) return process.env.PYTHON_CMD;
+  for (const cmd of PYTHON_CANDIDATES) {
+    const probe = spawnSync(cmd, ["-c", "import sys; sys.exit(0)"], {
+      stdio: "ignore",
+      timeout: 10000,
+    });
+    if (!probe.error && probe.status === 0) return cmd;
+  }
+  // Nothing worked; fall back to the platform default so the failure surfaces
+  // as a spawn error naming a real interpreter rather than silently doing nothing.
+  return PYTHON_CANDIDATES[0];
+}
+
+const PYTHON_CMD = detectPythonCmd();
+
 // Helper: run python script with args
 function runPythonCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
-    const child = spawn("python3", args, { cwd: process.cwd() });
+    const child = spawn(PYTHON_CMD, args, { cwd: process.cwd() });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d.toString()));
     child.stderr.on("data", (d) => (stderr += d.toString()));
     child.on("close", (code) => resolve({ stdout, stderr, code: code || 0 }));
-    child.on("error", (err) => resolve({ stdout: "", stderr: err.message, code: 1 }));
+    child.on("error", (err) =>
+      resolve({
+        stdout: "",
+        stderr: `Failed to launch Python interpreter '${PYTHON_CMD}': ${err.message}. Set PYTHON_CMD to the correct interpreter path.`,
+        code: 1,
+      })
+    );
   });
 }
 
@@ -99,6 +130,7 @@ app.get("/api/health", (_req, res) => {
     status: "ok",
     hasGeminiKey: !!process.env.GEMINI_API_KEY,
     workspaceDir: WORKSPACE_DIR,
+    pythonCmd: PYTHON_CMD,
   });
 });
 

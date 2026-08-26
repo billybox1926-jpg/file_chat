@@ -65,6 +65,14 @@ npm run dev          # http://localhost:3000
 
 Set `GEMINI_API_KEY` to enable AI-assisted editing — copy `.env.example` to `.env` and fill it in. Without a key the server falls back to the deterministic offline engine.
 
+The server locates a Python interpreter at startup, probing `python`, `py`, then `python3` on Windows and `python3`, then `python` elsewhere — the available name differs by platform, since python.org's Windows installer ships `python.exe`/`py.exe` but no `python3.exe`. Override it with `PYTHON_CMD` if detection picks the wrong one or your interpreter lives outside `PATH`:
+
+```bash
+PYTHON_CMD=/usr/bin/python3.12 npm run dev
+```
+
+`GET /api/health` reports the interpreter actually in use as `pythonCmd`.
+
 ## CLI reference
 
 ### Flags
