@@ -163,6 +163,24 @@ export function isSafeConfigPath(value: unknown, baseDir: string = process.cwd()
  * persisted, and path-valued keys must resolve inside baseDir.
  * Returns the sanitized config, or an error naming the offending key.
  */
+/** Per-key type validation for config values. */
+const CONFIG_VALUE_TYPES: Record<string, "number" | "integer" | "boolean" | "string"> = {
+  temperature: "number",
+  top_k: "integer",
+  chunk_size: "integer",
+  chunk_overlap: "integer",
+  watch_debounce_ms: "integer",
+  git_enabled: "boolean",
+  watchdog_auto_index: "boolean",
+  require_edit_confirmation: "boolean",
+  model: "string",
+  ollama_url: "string",
+  provider: "string",
+  retrieval_mode: "string",
+};
+
+export { CONFIG_VALUE_TYPES };
+
 export function validateConfigPayload(
   payload: unknown,
   baseDir: string = process.cwd()
@@ -187,10 +205,34 @@ export function validateConfigPayload(
         };
       }
     }
+    // Type-check all known keys to prevent malformed config persistence.
+    const expected = CONFIG_VALUE_TYPES[key];
+    if (expected && !validateValueType(value, expected)) {
+      return {
+        ok: false,
+        error: `Config key '${key}' expects ${expected}, got ${value === null ? "null" : typeof value}`,
+      };
+    }
     sanitized[key] = value;
   }
 
   return { ok: true, config: sanitized };
+}
+
+function validateValueType(
+  value: unknown,
+  type: "number" | "integer" | "boolean" | "string"
+): boolean {
+  switch (type) {
+    case "string":
+      return typeof value === "string";
+    case "boolean":
+      return typeof value === "boolean";
+    case "number":
+      return typeof value === "number" && !Number.isNaN(value);
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value) && !Number.isNaN(value);
+  }
 }
 
 /** Untrusted-context fencing, mirroring file_chat.py. Retrieved document text is
