@@ -83,6 +83,27 @@ export function getSafeWorkspacePath(
  */
 export const PATH_CONFIG_KEYS = ["audit_log", "session_dir"] as const;
 
+/**
+ * Project files that path-valued config keys must never target.
+ * audit_log / session_dir are written to by the engine on every edit, so
+ * pointing them at a source file corrupts it (and with git_enabled, commits
+ * the corruption). Config and lockfiles are equally off-limits.
+ */
+export const PROTECTED_PATHS = new Set([
+  "config.json",
+  "package.json",
+  "package-lock.json",
+  "server.ts",
+  "requirements.txt",
+  "tsconfig.json",
+  "vite.config.ts",
+  ".env",
+  ".env.example",
+  ".gitignore",
+  "README.md",
+  "LICENSE",
+]);
+
 /** Keys the server accepts on POST /api/config. Anything else is dropped. */
 export const ALLOWED_CONFIG_KEYS = [
   "model",
@@ -126,7 +147,15 @@ export function isSafeConfigPath(value: unknown, baseDir: string = process.cwd()
 
   const base = path.resolve(baseDir);
   const resolved = path.resolve(base, decoded);
-  return resolved !== base && resolved.startsWith(base + path.sep);
+  if (resolved === base || !resolved.startsWith(base + path.sep)) return false;
+
+  // Reject paths that target a protected project file. audit_log/session_dir
+  // are opened for append by the engine on every edit, so pointing them at a
+  // source file corrupts it (and with git_enabled, commits the corruption).
+  const basename = path.basename(resolved);
+  if (PROTECTED_PATHS.has(basename)) return false;
+
+  return true;
 }
 
 /**
