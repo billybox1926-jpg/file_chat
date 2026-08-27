@@ -5,6 +5,7 @@ import { spawn, spawnSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import { GoogleGenAI } from "@google/genai";
 import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction, validateConfigPayload, buildUntrustedContextBlock, CONTEXT_FENCE } from "./src/utils/security";
 
@@ -24,6 +25,79 @@ if (!fs.existsSync(WORKSPACE_DIR)) {
 export { assertInsideWorkspace, getSafeWorkspacePath };
 
 app.use(express.json({ limit: "20mb" }));
+
+// ==========================================
+// Security headers (helmet)
+// ==========================================
+// Sets CSP, X-Frame-Options, X-Content-Type-Options, and others.
+// CSP is tuned to allow the inline Vite dev scripts and same-origin API calls.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'none'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-origin" },
+  })
+);
+
+// ==========================================
+// CSRF / cross-origin protection
+// ==========================================
+// Reject cross-origin requests that lack a custom header. Browsers only send
+// custom headers (X-Requested-With) on same-origin requests or CORS preflight;
+// simple form posts and fetch() from another origin cannot set them, so this
+// blocks the attack described in #20 without requiring cookies or tokens.
+const ALLOWED_ORIGINS = new Set(["http://localhost:3000", "http://127.0.0.1:3000"]);
+
+/**
+ * CSRF / cross-origin protection middleware.
+ * Rejects cross-origin requests that lack a custom header. Browsers only send
+ * custom headers (X-Requested-With) on same-origin requests or CORS preflight;
+ * simple form posts and fetch() from another origin cannot set them, so this
+ * blocks the attack described in #20 without requiring cookies or tokens.
+ *
+ * Same-origin requests (matching Origin or no Origin + X-Requested-With) pass.
+ * /api/health is intentionally open for monitoring tools.
+ */
+export function checkSameOrigin(
+  req: { headers: Record<string, string | string[] | undefined>; path: string },
+  res: { status(n: number): { json(obj: unknown): void } },
+  next: () => void
+): void {
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  const requestedWith = typeof req.headers["x-requested-with"] === "string" ? req.headers["x-requested-with"] : undefined;
+
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    return next();
+  }
+
+  if (!origin && requestedWith === "XMLHttpRequest") {
+    return next();
+  }
+
+  if (req.path === "/api/health") {
+    return next();
+  }
+
+  return void res.status(403).json({
+    error: "Cross-origin request blocked. This API is same-origin only.",
+  });
+}
+
+if (process.env.NODE_ENV !== "test") {
+  app.use((req, res, next) => checkSameOrigin(req, res, next));
+}
 
 // ==========================================
 // Rate limiting
@@ -749,8 +823,9 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`FileChat Studio running at http://0.0.0.0:${PORT}`);
+  const HOST = process.env.HOST || "127.0.0.1";
+  app.listen(PORT, HOST, () => {
+    console.log(`FileChat Studio running at http://${HOST}:${PORT}`);
   });
 }
 
