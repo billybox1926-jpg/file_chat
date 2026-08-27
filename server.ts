@@ -438,6 +438,27 @@ app.post("/api/files/save", writeLimiter, (req, res) => {
   }
 });
 
+// Append to a file — atomic server-side operation, no TOCTOU race.
+app.post("/api/files/append", writeLimiter, (req, res) => {
+  try {
+    const { path: rel, text } = req.body;
+    if (!rel) return res.status(400).json({ error: "Path required" });
+    if (typeof text !== "string") return res.status(400).json({ error: "Text required" });
+    const target = getSafeWorkspacePath(rel);
+    if (!target) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const parentDir = path.dirname(target);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    fs.appendFileSync(target, text, "utf-8");
+    res.json({ success: true, path: rel });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Delete file
 app.delete("/api/files/delete", writeLimiter, (req, res) => {
   try {

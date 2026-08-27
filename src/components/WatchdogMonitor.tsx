@@ -31,13 +31,11 @@ export default function WatchdogMonitor({ files, onRefreshFiles }: WatchdogMonit
   const simulateFileModification = async (filename: string) => {
     setSimulating(true);
     try {
-      const res = await fetch(`/api/files/content?path=${encodeURIComponent(filename)}`);
-      const data = await res.json();
-      const newContent = (data.content || "") + `\n# [Watchdog update: ${new Date().toLocaleTimeString()}]\n`;
-      await fetch("/api/files/save", {
+      const text = `\n# [Watchdog update: ${new Date().toLocaleTimeString()}]\n`;
+      await fetch("/api/files/append", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: filename, content: newContent }),
+        body: JSON.stringify({ path: filename, text }),
       });
       setTimeout(() => {
         fetchEvents();
