@@ -167,6 +167,26 @@ interface WatchEvent {
   details?: string;
 }
 const watchdogEvents: WatchEvent[] = [];
+const WATCHDOG_LOG_PATH = path.join(process.cwd(), "watchdog.log");
+
+// Load persisted watchdog events on startup (last 100).
+try {
+  if (fs.existsSync(WATCHDOG_LOG_PATH)) {
+    const lines = fs.readFileSync(WATCHDOG_LOG_PATH, "utf-8").split("\n").filter((l) => l.trim());
+    for (const line of lines.slice(-100)) {
+      try {
+        const evt = JSON.parse(line) as WatchEvent;
+        watchdogEvents.push(evt);
+      } catch {}
+    }
+  }
+} catch {}
+
+function persistWatchdogEvent(event: WatchEvent): void {
+  try {
+    fs.appendFileSync(WATCHDOG_LOG_PATH, JSON.stringify(event) + "\n", "utf-8");
+  } catch {}
+}
 
 // Watch workspace_docs for live events
 if (process.env.NODE_ENV !== "test") {
@@ -187,6 +207,7 @@ if (process.env.NODE_ENV !== "test") {
       };
       watchdogEvents.unshift(event);
       if (watchdogEvents.length > 100) watchdogEvents.pop();
+      persistWatchdogEvent(event);
     });
   } catch (e) {
     console.log("Watch error:", e);
