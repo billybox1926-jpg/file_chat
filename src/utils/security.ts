@@ -260,7 +260,7 @@ export function parseReplaceInstruction(instruction: string): [string, string] |
           const replacement = rendIdx !== -1 ? afterWith.slice(1, rendIdx) : afterWith.slice(1);
           return [target, replacement];
         } else {
-          const parts = afterWith.split(/\s+(?:and|in|on|to)\s+/i);
+          const parts = afterWith.split(/\s+(?:and|then|where|in|on|to)\s+/i);
           return [target, parts[0].trim().replace(/^['"]|['"]$/g, "")];
         }
       }
@@ -279,7 +279,7 @@ export function parseReplaceInstruction(instruction: string): [string, string] |
       const replacement = rendIdx !== -1 ? afterWith.slice(1, rendIdx) : afterWith.slice(1);
       return [target, replacement];
     } else {
-      const parts = afterWith.split(/\s+(?:and|in|on|to)\s+/i);
+      const parts = afterWith.split(/\s+(?:and|then|where|in|on|to)\s+/i);
       return [target, parts[0].trim().replace(/^['"]|['"]$/g, "")];
     }
   }
