@@ -22,7 +22,7 @@ export default function TerminalView({ onExecuteEdit, onOpenDiff, onSelectForDif
     {
       id: "1",
       type: "system",
-      text: "FileChat Interactive CLI v1.2.0 [Retrieval: TF-IDF + FAISS | Engine: Gemini 3.7 & Ollama]",
+      text: "FileChat Interactive CLI v1.2.4 [Retrieval: TF-IDF + FAISS | Engine: Gemini 3.7 & Ollama]",
       timestamp: new Date().toLocaleTimeString(),
     },
     {
