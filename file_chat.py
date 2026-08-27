@@ -829,11 +829,13 @@ def parse_replace_instruction(instruction: str) -> Optional[Tuple[str, str]]:
         else:
             replacement = after_with[1:]
     else:
-        # Non-quoted replacement: strip out trailing conjunctions/notes
+        # Non-quoted replacement: strip out trailing conjunctions/notes.
+        # Must match the stop-word set in src/utils/security.ts exactly so
+        # the CLI and web paths never silently disagree.
         tokens = after_with.split()
         clean_tokens = []
         for token in tokens:
-            if token.lower() in ("and", "then", "where"):
+            if token.lower() in ("and", "then", "where", "in", "on", "to"):
                 break
             clean_tokens.append(token)
         if clean_tokens:
