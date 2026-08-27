@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { GoogleGenAI } from "@google/genai";
 import { createTwoFilesPatch } from "diff";
+import chokidar from "chokidar";
 import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction, validateConfigPayload, buildUntrustedContextBlock, CONTEXT_FENCE } from "./src/utils/security";
 
 dotenv.config();
@@ -191,19 +192,33 @@ function persistWatchdogEvent(event: WatchEvent): void {
 // Watch workspace_docs for live events
 if (process.env.NODE_ENV !== "test") {
   try {
-    fs.watch(WORKSPACE_DIR, { recursive: true }, (eventType, filename) => {
-      if (!filename || filename.startsWith(".")) return;
-      const fullPath = path.join(WORKSPACE_DIR, filename);
-      const exists = fs.existsSync(fullPath);
-      const resolvedType = !exists ? "deleted" : eventType === "rename" ? "created" : "modified";
-      
+    const watcher = chokidar.watch(WORKSPACE_DIR, {
+      ignored: /(^|[\/\\])\../, // ignore dotfiles
+      persistent: true,
+      ignoreInitial: true,
+      usePolling: process.platform === "win32", // polling needed for reliable events on Windows
+    });
+    watcher.on("ready", () => {
+      console.log(`File watcher ready: ${WORKSPACE_DIR}`);
+    });
+    watcher.on("error", (err) => {
+      console.error("Watcher error:", err);
+    });
+    watcher.on("all", (eventType, filePath) => {
+      if (!filePath) return;
+      const filename = path.basename(filePath);
+      if (filename.startsWith(".")) return;
+      const exists = fs.existsSync(filePath);
+      const resolvedType =
+        eventType === "add" ? "created" :
+        eventType === "unlink" ? "deleted" : "modified";
       const event: WatchEvent = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
         timestamp: new Date().toLocaleTimeString(),
         type: resolvedType,
         filename,
-        path: fullPath,
-        details: exists ? `Size: ${fs.statSync(fullPath).size} bytes` : "File removed",
+        path: filePath,
+        details: exists ? `Size: ${fs.statSync(filePath).size} bytes` : "File removed",
       };
       watchdogEvents.unshift(event);
       if (watchdogEvents.length > 100) watchdogEvents.pop();
