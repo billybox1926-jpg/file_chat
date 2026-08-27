@@ -7,7 +7,7 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
-    "test": "cross-env NODE_ENV=test tsx --test tests/security.test.ts tests/shortcuts.test.ts tests/config.test.ts tests/prompt-injection.test.ts __tests__/server.test.ts",
+    "test": "cross-env NODE_ENV=test tsx --test tests/security.test.ts tests/shortcuts.test.ts tests/config.test.ts tests/prompt-injection.test.ts tests/csrf.test.ts __tests__/server.test.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
