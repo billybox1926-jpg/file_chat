@@ -249,7 +249,7 @@ app.post("/api/config", writeLimiter, (req, res) => {
 const FILE_SCAN_MAX_ENTRIES = 5000;
 const FILE_SCAN_MAX_DEPTH = 12;
 
-app.get("/api/files", (_req, res) => {
+app.get("/api/files", readLimiter, (_req, res) => {
   try {
     const files: any[] = [];
     let truncated = false;
@@ -489,7 +489,7 @@ Task: Output ONLY the complete revised text of the entire file. Do NOT wrap in m
 
 // Apply Edit
 app.post("/api/edit/apply", writeLimiter, async (req, res) => {
-  const { file, instruction, customContent } = req.body;
+  const { file, instruction, customContent, confirmed } = req.body;
   if (!file) return res.status(400).json({ error: "File required" });
 
   const safePath = getSafeWorkspacePath(file);
