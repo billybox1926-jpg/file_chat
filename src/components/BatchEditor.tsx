@@ -8,7 +8,7 @@ interface BatchEditorProps {
 }
 
 export default function BatchEditor({ files, onRefreshFiles }: BatchEditorProps) {
-  const [selectedFiles, setSelectedFiles] = useState<string[]>(files.map((f) => f.name));
+  const [selectedFiles, setSelectedFiles] = useState<string[]>(files.map((f) => f.relativePath));
   const [instruction, setInstruction] = useState("replace '8080' with '9090'");
   const [loading, setLoading] = useState(false);
   const [batchResults, setBatchResults] = useState<any[] | null>(null);
@@ -18,15 +18,15 @@ export default function BatchEditor({ files, onRefreshFiles }: BatchEditorProps)
     if (selectedFiles.length === files.length) {
       setSelectedFiles([]);
     } else {
-      setSelectedFiles(files.map((f) => f.name));
+      setSelectedFiles(files.map((f) => f.relativePath));
     }
   };
 
-  const toggleFile = (name: string) => {
-    if (selectedFiles.includes(name)) {
-      setSelectedFiles(selectedFiles.filter((f) => f !== name));
+  const toggleFile = (relativePath: string) => {
+    if (selectedFiles.includes(relativePath)) {
+      setSelectedFiles(selectedFiles.filter((f) => f !== relativePath));
     } else {
-      setSelectedFiles([...selectedFiles, name]);
+      setSelectedFiles([...selectedFiles, relativePath]);
     }
   };
 
@@ -92,11 +92,11 @@ export default function BatchEditor({ files, onRefreshFiles }: BatchEditorProps)
               <span>ALL</span>
             </button>
             {files.map((f) => {
-              const isChecked = selectedFiles.includes(f.name);
+              const isChecked = selectedFiles.includes(f.relativePath);
               return (
                 <button
-                  key={f.name}
-                  onClick={() => toggleFile(f.name)}
+                  key={f.relativePath}
+                  onClick={() => toggleFile(f.relativePath)}
                   className={`px-2 py-0.5 rounded text-[10px] transition-colors font-mono flex items-center gap-1 border ${
                     isChecked
                       ? "bg-[#112D18] text-[#7EE787] border-[#238636]/60 font-bold"
@@ -104,7 +104,7 @@ export default function BatchEditor({ files, onRefreshFiles }: BatchEditorProps)
                   }`}
                 >
                   {isChecked ? <CheckSquare className="w-2.5 h-2.5 text-[#7EE787]" /> : <Square className="w-2.5 h-2.5 text-[#7D8590]" />}
-                  <span>{f.name}</span>
+                  <span>{f.relativePath}</span>
                 </button>
               );
             })}
