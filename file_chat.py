@@ -1168,7 +1168,7 @@ def main():
         } for m in matches], indent=2))
         return
 
-    if args.interactive or len(sys.argv) == 1:
+    if args.interactive or not (args.edit or args.query or args.test_suite):
         cli.run_interactive_loop()
 
 
