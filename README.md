@@ -124,6 +124,7 @@ Anything else is treated as a chat prompt, answered with retrieved document cont
 | `watchdog_auto_index` | `true` | Start the watcher on launch |
 | `watch_debounce_ms` | `300` | Watcher debounce interval |
 | `retrieval_mode` | `hybrid_tfidf_vector` | Retrieval strategy |
+| `require_edit_confirmation` | `false` | Require `confirmed: true` on `/api/edit/apply` writes |
 
 ## HTTP API
 
@@ -182,6 +183,21 @@ config.json               Runtime configuration
 ## Security
 
 All filesystem access is confined to `workspace_docs/`. `src/utils/security.ts` rejects parent traversal, URL-encoded and double-encoded escapes, backslash variants, null-byte injection, and symlinks resolving outside the workspace. The Python engine applies the same rule via `os.path.realpath`, so a symlink or Windows junction placed *inside* the workspace cannot be used to write to a file outside it. Never point the workspace at a directory holding secrets — the corpus is fully readable through the API.
+
+### Untrusted document context
+
+Retrieved chunks are **never** placed in the system prompt. They are appended to the user message inside an explicit fence:
+
+```
+-----UNTRUSTED-DOCUMENT-CONTEXT-----
+[Document: notes.md (Score: 0.9)]
+...chunk text...
+-----END-UNTRUSTED-DOCUMENT-CONTEXT-----
+```
+
+The system prompt states that fenced content is data and its instructions must not be obeyed. Chunk text and file names are sanitized so a document cannot close the fence early, and each chunk is capped at 4,000 characters so one file cannot dominate the context window. This limits — but does not eliminate — indirect prompt injection: a sufficiently persuasive document can still influence generation, so review diffs before applying them.
+
+Set `require_edit_confirmation: true` in `config.json` to make `/api/edit/apply` reject any `customContent` write that does not carry `confirmed: true`, returning `428`. That turns a hijacked generation from a silent write into one the caller must explicitly approve. It is off by default so existing callers keep working; the UI previews before applying either way.
 
 `GET /api/files` walks the workspace synchronously, so it is bounded to 5,000 entries and 12 levels deep and never traverses links; a partial listing sets `truncated: true` in the response.
 
