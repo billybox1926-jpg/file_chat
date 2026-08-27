@@ -24,6 +24,13 @@ export default function DiffViewer({ files, selectedFile, onRefreshFiles }: Diff
     }
   }, [selectedFile, files]);
 
+  // Reset active file when files list changes (e.g., after create/delete).
+  useEffect(() => {
+    if (files.length > 0 && !files.some((f) => f.relativePath === activeFile)) {
+      setActiveFile(files[0].relativePath);
+    }
+  }, [files]);
+
   const presetInstructions: Record<string, string[]> = {
     "api_service.py": [
       "replace '8080' with '9090'",
