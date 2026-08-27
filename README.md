@@ -33,8 +33,10 @@ All Python dependencies are optional and degrade gracefully when absent:
 | `pypdf` | text extraction from PDFs | PDFs indexed as a placeholder |
 
 ```bash
-pip install numpy faiss-cpu watchdog pypdf   # all optional
+pip install -r requirements.txt   # all optional; see the file for per-package notes
 ```
+
+Or install individually: `pip install numpy faiss-cpu watchdog pypdf`
 
 ## Quick start
 
@@ -179,7 +181,11 @@ config.json               Runtime configuration
 
 ## Security
 
-All filesystem access is confined to `workspace_docs/`. `src/utils/security.ts` rejects parent traversal, URL-encoded and double-encoded escapes, backslash variants, null-byte injection, and symlinks resolving outside the workspace. Never point the workspace at a directory holding secrets — the corpus is fully readable through the API.
+All filesystem access is confined to `workspace_docs/`. `src/utils/security.ts` rejects parent traversal, URL-encoded and double-encoded escapes, backslash variants, null-byte injection, and symlinks resolving outside the workspace. The Python engine applies the same rule via `os.path.realpath`, so a symlink or Windows junction placed *inside* the workspace cannot be used to write to a file outside it. Never point the workspace at a directory holding secrets — the corpus is fully readable through the API.
+
+`GET /api/files` walks the workspace synchronously, so it is bounded to 5,000 entries and 12 levels deep and never traverses links; a partial listing sets `truncated: true` in the response.
+
+`git_enabled` in `config.json` makes the engine auto-commit every applied edit. Leave it off unless you want edits to land in git history — with it on, a scripted or accidental edit is committed immediately.
 
 ### Rate limits
 

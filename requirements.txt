@@ -1,0 +1,30 @@
+# FileChat Python dependencies
+#
+# The engine (file_chat.py) runs on the standard library alone — every entry
+# below is OPTIONAL and has a pure-Python fallback. Install all of them with:
+#     pip install -r requirements.txt
+#
+# Requires Python 3.10+.
+
+# Array math backing the vector index. Without it, embeddings and cosine
+# similarity are computed in pure Python (slower, same results).
+numpy>=1.24
+
+# Fast approximate vector search. Without it, retrieval falls back to
+# pure-Python cosine similarity over the same pseudo-embeddings.
+# Note: the import name is `faiss`; there is no official Windows wheel for
+# some versions — the fallback path is fully supported.
+faiss-cpu>=1.7.4
+
+# Native filesystem events. Without it, PollingWatchdog polls on an interval.
+watchdog>=3.0.0
+
+# PDF text extraction. Without it, PDFs are indexed as a placeholder string
+# rather than their contents.
+pypdf>=4.0.0
+
+# --- Development / test dependencies -------------------------------------
+# The suite uses only stdlib unittest, so pytest is optional; it is listed
+# because the documented command is `python -m pytest test_file_chat.py -v`.
+# Run without installing anything via:  uv run --with pytest python -m pytest
+pytest>=8.0.0
