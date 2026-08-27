@@ -5,6 +5,7 @@ import {
   isSafeConfigPath,
   validateConfigPayload,
   ALLOWED_CONFIG_KEYS,
+  PROTECTED_PATHS,
 } from "../src/utils/security";
 
 const BASE = path.resolve("/project/root");
@@ -119,5 +120,25 @@ describe("validateConfigPayload", () => {
       const result = validateConfigPayload(payload, BASE);
       assert.equal(result.ok, true, `key ${key} should be accepted`);
     }
+  });
+});
+
+describe("isSafeConfigPath rejects protected project files", () => {
+  for (const file of PROTECTED_PATHS) {
+    test(`rejects targeting ${file}`, () => {
+      assert.equal(isSafeConfigPath(file, BASE), false);
+      assert.equal(isSafeConfigPath(`./${file}`, BASE), false);
+      assert.equal(isSafeConfigPath(`subdir/${file}`, BASE), false);
+    });
+  }
+
+  test("accepts a logs/ subdir for audit_log", () => {
+    assert.equal(isSafeConfigPath("logs/audit.log", BASE), true);
+    assert.equal(isSafeConfigPath("logs/sub/dir.log", BASE), true);
+  });
+
+  test("accepts default audit.log and .filechat_sessions", () => {
+    assert.equal(isSafeConfigPath("audit.log", BASE), true);
+    assert.equal(isSafeConfigPath(".filechat_sessions", BASE), true);
   });
 });
