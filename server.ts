@@ -478,10 +478,10 @@ app.delete("/api/files/delete", writeLimiter, (req, res) => {
 });
 
 // Audit Log entries
-app.get("/api/audit", readLimiter, (_req, res) => {
+app.get("/api/audit", readLimiter, (req, res) => {
   try {
     if (!fs.existsSync(AUDIT_LOG_PATH)) {
-      return res.json({ records: [] });
+      return res.json({ records: [], total: 0 });
     }
     const lines = fs
       .readFileSync(AUDIT_LOG_PATH, "utf-8")
@@ -494,7 +494,14 @@ app.get("/api/audit", readLimiter, (_req, res) => {
         return { raw: l };
       }
     });
-    res.json({ records: records.reverse() });
+    // Pagination: newest-first, then slice.
+    const total = records.length;
+    const rawLimit = parseInt(req.query.limit as string);
+    const rawOffset = parseInt(req.query.offset as string);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 50;
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
+    const sliced = records.reverse().slice(offset, offset + limit);
+    res.json({ records: sliced, total, limit, offset });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
