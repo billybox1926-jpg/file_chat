@@ -819,6 +819,11 @@ app.post("/api/ai/direct-generate", expensiveLimiter, async (req, res) => {
   }
 });
 
+// Catch /api/* 404s so API clients get JSON, not the SPA HTML fallback.
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
+});
+
 // Vite Middleware & static fallback
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
