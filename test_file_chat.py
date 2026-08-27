@@ -13,6 +13,8 @@ import shutil
 import tempfile
 import threading
 import unittest
+import hashlib
+import subprocess
 
 # Import modules from file_chat
 from file_chat import (
@@ -264,6 +266,63 @@ class TestFileChat(unittest.TestCase):
         res = cli.execute_edit("doc_a.md\0.txt", "replace a with b", dry_run=True)
         self.assertFalse(res["success"])
         self.assertIn("Access denied", res["error"])
+
+    def test_pseudo_embedding_is_process_stable(self):
+        """Embeddings must be identical across interpreter runs.
+
+        Python's hash() is salted per process (PYTHONHASHSEED), and server.ts
+        spawns a FRESH python subprocess per request — so a salted hash meant
+        vector scores were not reproducible between two identical API calls.
+        This pins the known blake2b digest for a fixed word so a regression to
+        hash() is caught rather than silently degrading retrieval.
+        """
+        engine = IncrementalRetrievalEngine()
+
+        # Deterministic across every run, machine and Python version.
+        self.assertEqual(
+            engine._stable_hash("authenticate"),
+            int.from_bytes(
+                hashlib.blake2b(b"authenticate", digest_size=8).digest(), "big"
+            ),
+        )
+        # Explicitly NOT the salted builtin.
+        self.assertNotEqual(engine._stable_hash("authenticate"), hash("authenticate"))
+
+        # Same text -> byte-identical vector, repeatedly.
+        v1 = engine._compute_pseudo_embedding("authenticate user credentials")
+        v2 = engine._compute_pseudo_embedding("authenticate user credentials")
+        self.assertEqual(v1, v2)
+
+        # A different engine instance agrees too.
+        self.assertEqual(v1, IncrementalRetrievalEngine()._compute_pseudo_embedding(
+            "authenticate user credentials"
+        ))
+
+        # Distinct text must still produce a distinct vector.
+        self.assertNotEqual(v1, engine._compute_pseudo_embedding("rate limit tuning"))
+
+    def test_pseudo_embedding_subprocess_determinism(self):
+        """Two independent interpreters must produce the same embedding fingerprint."""
+        script = (
+            "import sys, hashlib, json;"
+            f"sys.path.insert(0, {os.getcwd()!r});"
+            "from file_chat import IncrementalRetrievalEngine as E;"
+            "v = E()._compute_pseudo_embedding('authenticate user credentials');"
+            "print(hashlib.md5(repr([round(x,6) for x in v]).encode()).hexdigest())"
+        )
+        fingerprints = set()
+        for _ in range(2):
+            proc = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            fingerprints.add(proc.stdout.strip())
+
+        self.assertEqual(
+            len(fingerprints), 1,
+            f"embeddings differ across processes: {fingerprints}",
+        )
 
     def test_prompt_injection_context_never_in_system_prompt(self):
         """Retrieved document text must go in the USER message, never the system prompt."""
