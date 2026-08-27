@@ -1,6 +1,26 @@
+<div align="center">
+
+<img src="assets/icon.png" alt="FileChat icon" width="96" height="96">
+
 # FileChat
 
-A local-first document retrieval and file-editing assistant. Combines hybrid search (TF-IDF + vector similarity) over a document corpus with diff-based editing, undo/redo, audit logging, and live filesystem watching — available both as a Python CLI/REPL and as a React web workbench.
+**A local-first document retrieval and file-editing assistant.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-2ea043.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Node 20+](https://img.shields.io/badge/Node-20%2B-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Vite 6](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+
+[![tests](https://img.shields.io/badge/tests-106%20passing-2ea043)](#development)
+[![typecheck](https://img.shields.io/badge/tsc--noEmit-clean-2ea043?logo=typescript&logoColor=white)](#development)
+[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-8B949E)](#requirements)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-58A6FF)](#development)
+
+</div>
+
+Combines hybrid search (TF-IDF + vector similarity) over a document corpus with diff-based editing, undo/redo, audit logging, and live filesystem watching — available both as a Python CLI/REPL and as a React web workbench.
 
 - **`file_chat.py`** — the engine and CLI. Indexing, retrieval, diff generation, undo stack, audit log, AI providers.
 - **`server.ts`** — an Express + Vite server that wraps the CLI in a REST API and serves the UI.
@@ -150,9 +170,9 @@ Every path-accepting endpoint validates against the workspace root and returns `
 ## Development
 
 ```bash
-npm test                                    # TypeScript security + API tests (40 tests)
+npm test                                    # TypeScript security + API tests (78 tests)
 npm run lint                                # tsc --noEmit
-python -m pytest test_file_chat.py -v       # Python engine tests (14 tests)
+python -m pytest test_file_chat.py -v       # Python engine tests (28 tests)
 npm run build                               # production bundle
 npm start                                   # serve the build
 ```
