@@ -143,17 +143,42 @@ function detectPythonCmd(): string {
 
 const PYTHON_CMD = detectPythonCmd();
 
-// Helper: run python script with args
+// Helper: run python script with args.
+// Hard-bounded: a hung engine call (slow AI API, blocking read, infinite loop)
+// would otherwise hold the HTTP request open forever and leak an orphaned
+// process. On timeout the child is killed and the caller gets a real error.
+const PYTHON_TIMEOUT_MS = Number(process.env.PYTHON_TIMEOUT_MS) || 60_000;
+
 function runPythonCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
     const child = spawn(PYTHON_CMD, args, { cwd: process.cwd() });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const finish = (result: { stdout: string; stderr: string; code: number }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish({
+        stdout,
+        stderr:
+          `Python command timed out after ${PYTHON_TIMEOUT_MS}ms and was terminated. ` +
+          `Raise PYTHON_TIMEOUT_MS if this workload legitimately takes longer.`,
+        code: 124,
+      });
+    }, PYTHON_TIMEOUT_MS);
+
     child.stdout.on("data", (d) => (stdout += d.toString()));
     child.stderr.on("data", (d) => (stderr += d.toString()));
-    child.on("close", (code) => resolve({ stdout, stderr, code: code || 0 }));
+    child.on("close", (code) => finish({ stdout, stderr, code: code || 0 }));
     child.on("error", (err) =>
-      resolve({
+      finish({
         stdout: "",
         stderr: `Failed to launch Python interpreter '${PYTHON_CMD}': ${err.message}. Set PYTHON_CMD to the correct interpreter path.`,
         code: 1,

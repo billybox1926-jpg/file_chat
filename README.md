@@ -201,6 +201,10 @@ Set `require_edit_confirmation: true` in `config.json` to make `/api/edit/apply`
 
 `GET /api/files` walks the workspace synchronously, so it is bounded to 5,000 entries and 12 levels deep and never traverses links; a partial listing sets `truncated: true` in the response.
 
+Every Python subprocess call is bounded by `PYTHON_TIMEOUT_MS` (default 60000). On timeout the child is killed and the endpoint returns exit code `124` with an explanatory message, so a hung engine call cannot hold an HTTP request open or leak an orphaned process.
+
+Retrieval embeddings are hashed with `blake2b`, not Python's built-in `hash()`. The builtin is salted per interpreter run, and the server spawns a fresh Python process per request — so a salted hash made vector scores differ between two identical API calls. `blake2b` keeps the index reproducible across runs and machines.
+
 `git_enabled` in `config.json` makes the engine auto-commit every applied edit. Leave it off unless you want edits to land in git history — with it on, a scripted or accidental edit is committed immediately.
 
 ### Rate limits

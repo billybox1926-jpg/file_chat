@@ -11,6 +11,7 @@ import sys
 import json
 import time
 import math
+import hashlib
 import re
 import argparse
 import difflib
@@ -269,16 +270,29 @@ class IncrementalRetrievalEngine:
             for term, count in df.items()
         }
 
+    @staticmethod
+    def _stable_hash(word: str) -> int:
+        """Process-stable hash for feature hashing.
+
+        Python's built-in hash() is salted per interpreter run (PYTHONHASHSEED),
+        so identical text produced different embeddings on every process — and
+        the engine is invoked as a fresh subprocess per request by server.ts,
+        which meant vector scores were not reproducible between calls. blake2b
+        gives the same digest everywhere, forever.
+        """
+        digest = hashlib.blake2b(word.encode("utf-8"), digest_size=8).digest()
+        return int.from_bytes(digest, "big")
+
     def _compute_pseudo_embedding(self, text: str) -> List[float]:
         """Calculates normalized fixed-size feature vector from hashing/character n-grams."""
         vec = [0.0] * self.vector_dim
         words = self._tokenize(text)
         if not words:
             return vec
-            
+
         for w in words:
-            h = hash(w)
-            idx = abs(h) % self.vector_dim
+            h = self._stable_hash(w)
+            idx = h % self.vector_dim
             sign = 1.0 if (h & 1) == 0 else -1.0
             vec[idx] += sign * (len(w) ** 0.5)
 
