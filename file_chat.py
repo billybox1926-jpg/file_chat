@@ -1144,6 +1144,13 @@ def main():
 
     cli = FileChatCLI(target_dir=args.directory, config_path=args.config)
 
+    if args.test_suite:
+        result = subprocess.run(
+            ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "test_file_chat.py", "-v"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        sys.exit(result.returncode)
+
     if args.edit:
         target_file, instr = args.edit
         res = cli.execute_edit(target_file, instr, dry_run=args.dry_run)
