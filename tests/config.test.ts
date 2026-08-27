@@ -111,12 +111,18 @@ describe("validateConfigPayload", () => {
 
   test("every documented config key is accepted", () => {
     for (const key of ALLOWED_CONFIG_KEYS) {
-      const payload: Record<string, unknown> =
-        key === "audit_log"
-          ? { audit_log: "audit.log" }
-          : key === "session_dir"
-          ? { session_dir: ".sessions" }
-          : { [key]: "value" };
+      const payload: Record<string, unknown> = {};
+      if (key === "audit_log") payload[key] = "audit.log";
+      else if (key === "session_dir") payload[key] = ".sessions";
+      else if (key === "temperature") payload[key] = 0.2;
+      else if (key === "top_k") payload[key] = 5;
+      else if (key === "chunk_size") payload[key] = 500;
+      else if (key === "chunk_overlap") payload[key] = 50;
+      else if (key === "watch_debounce_ms") payload[key] = 300;
+      else if (key === "git_enabled") payload[key] = true;
+      else if (key === "watchdog_auto_index") payload[key] = true;
+      else if (key === "require_edit_confirmation") payload[key] = false;
+      else payload[key] = "value"; // string fields
       const result = validateConfigPayload(payload, BASE);
       assert.equal(result.ok, true, `key ${key} should be accepted`);
     }
