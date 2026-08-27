@@ -186,6 +186,80 @@ class TestFileChat(unittest.TestCase):
         self.assertFalse(res_dry["success"])
         self.assertIn("Access denied", res_dry["error"])
 
+    def test_workspace_isolation_blocks_link_escape(self):
+        """A symlink/junction inside the workspace must not let a write follow it out.
+
+        Lexical containment checks (os.path.commonpath on the un-resolved path)
+        pass for a link that sits inside the workspace but resolves outside it,
+        so the write follows the link and lands on an external file.
+        """
+        outside = tempfile.mkdtemp(prefix="filechat_outside_")
+        try:
+            secret = os.path.join(outside, "secret.txt")
+            with open(secret, "w", encoding="utf-8") as f:
+                f.write("TOP SECRET ORIGINAL\n")
+
+            link = os.path.join(self.test_dir, "escape")
+            made = False
+            try:
+                os.symlink(outside, link, target_is_directory=True)
+                made = True
+            except (OSError, NotImplementedError, AttributeError):
+                # Windows symlinks need admin; a directory junction does not.
+                if sys.platform == "win32":
+                    import subprocess
+                    proc = subprocess.run(
+                        ["cmd", "/c", "mklink", "/J", link, outside],
+                        capture_output=True, text=True,
+                    )
+                    made = os.path.exists(link) and proc.returncode == 0
+
+            if not made:
+                self.skipTest("cannot create symlink or junction in this environment")
+
+            cli = FileChatCLI(target_dir=self.test_dir, config_path=self.config_file)
+            res = cli.execute_edit(
+                os.path.join("escape", "secret.txt"),
+                "replace 'SECRET' with 'PWNED'",
+                dry_run=False,
+            )
+
+            self.assertFalse(res["success"], "link escape should be denied")
+            self.assertIn("Access denied", res["error"])
+
+            with open(secret, "r", encoding="utf-8") as f:
+                self.assertEqual(
+                    f.read(), "TOP SECRET ORIGINAL\n",
+                    "file outside the workspace must be unmodified",
+                )
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_workspace_isolation_allows_legitimate_nested_file(self):
+        """The realpath guard must not reject genuine in-workspace subpaths."""
+        nested_dir = os.path.join(self.test_dir, "sub", "deeper")
+        os.makedirs(nested_dir, exist_ok=True)
+        nested = os.path.join(nested_dir, "note.md")
+        with open(nested, "w", encoding="utf-8") as f:
+            f.write("alpha content\n")
+
+        cli = FileChatCLI(target_dir=self.test_dir, config_path=self.config_file)
+        res = cli.execute_edit(
+            os.path.join("sub", "deeper", "note.md"),
+            "replace 'alpha' with 'beta'",
+            dry_run=False,
+        )
+        self.assertTrue(res["success"], res.get("error"))
+        with open(nested, "r", encoding="utf-8") as f:
+            self.assertIn("beta", f.read())
+
+    def test_workspace_isolation_rejects_null_byte(self):
+        """Null-byte injection in the path must be rejected, not raise."""
+        cli = FileChatCLI(target_dir=self.test_dir, config_path=self.config_file)
+        res = cli.execute_edit("doc_a.md\0.txt", "replace a with b", dry_run=True)
+        self.assertFalse(res["success"])
+        self.assertIn("Access denied", res["error"])
+
     def test_replace_with_embedded_with(self):
         """Verify replacement when target string contains the word 'with'."""
         cli = FileChatCLI(target_dir=self.test_dir)

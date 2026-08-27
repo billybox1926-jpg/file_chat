@@ -823,15 +823,31 @@ class FileChatCLI:
         else:
             abs_path = os.path.abspath(os.path.join(self.target_dir, file_path))
 
-        # Enforce workspace isolation / prevent directory traversal
+        # Enforce workspace isolation / prevent directory traversal.
+        # realpath() resolves symlinks, Windows junctions and mount points BEFORE
+        # the containment check — a lexical check alone passes for a link that
+        # sits inside the workspace but points outside it, and the subsequent
+        # write would follow the link out. Mirrors assertInsideWorkspace() in
+        # src/utils/security.ts.
+        if "\0" in file_path:
+            return {
+                "success": False,
+                "error": f"Access denied: invalid file path '{file_path}'",
+                "diff": ""
+            }
         try:
-            common = os.path.commonpath([self.target_dir, abs_path])
-            if common != self.target_dir:
+            real_target = os.path.realpath(self.target_dir)
+            real_path = os.path.realpath(abs_path)
+            # Compare case-insensitively on Windows, where paths are not case-sensitive.
+            cmp_target = os.path.normcase(real_target)
+            cmp_path = os.path.normcase(real_path)
+            if cmp_path != cmp_target and not cmp_path.startswith(cmp_target + os.sep):
                 return {
                     "success": False,
                     "error": f"Access denied: file '{file_path}' escapes target workspace '{self.target_dir}'",
                     "diff": ""
                 }
+            abs_path = real_path
         except Exception:
             return {
                 "success": False,

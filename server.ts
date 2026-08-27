@@ -188,18 +188,39 @@ app.post("/api/config", (req, res) => {
 });
 
 // Workspace Documents Listing
+// Bounded on purpose: the scan is synchronous, so an unbounded walk over a very
+// large or deeply nested workspace would block the event loop for every caller.
+// Caps keep the worst case predictable; `truncated` tells the client the listing
+// is partial rather than silently short.
+const FILE_SCAN_MAX_ENTRIES = 5000;
+const FILE_SCAN_MAX_DEPTH = 12;
+
 app.get("/api/files", (_req, res) => {
   try {
     const files: any[] = [];
-    function scanDir(dir: string, relPrefix = "") {
+    let truncated = false;
+
+    function scanDir(dir: string, relPrefix = "", depth = 0) {
+      if (truncated || depth > FILE_SCAN_MAX_DEPTH) {
+        if (depth > FILE_SCAN_MAX_DEPTH) truncated = true;
+        return;
+      }
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const ent of entries) {
+        if (files.length >= FILE_SCAN_MAX_ENTRIES) {
+          truncated = true;
+          return;
+        }
         if (ent.name.startsWith(".")) continue;
+        // Never traverse a symlink/junction: it can point outside the workspace
+        // or back into it, and isDirectory() is false for links so this is
+        // belt-and-braces against a cycle.
+        if (ent.isSymbolicLink()) continue;
         const full = path.join(dir, ent.name);
         const rel = path.join(relPrefix, ent.name);
         if (ent.isDirectory()) {
-          scanDir(full, rel);
-        } else {
+          scanDir(full, rel, depth + 1);
+        } else if (ent.isFile()) {
           const stat = fs.statSync(full);
           const ext = path.extname(ent.name).toLowerCase();
           files.push({
@@ -215,7 +236,7 @@ app.get("/api/files", (_req, res) => {
       }
     }
     scanDir(WORKSPACE_DIR);
-    res.json({ files });
+    res.json({ files, truncated, limits: { maxEntries: FILE_SCAN_MAX_ENTRIES, maxDepth: FILE_SCAN_MAX_DEPTH } });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
