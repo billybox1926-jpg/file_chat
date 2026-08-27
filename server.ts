@@ -4,6 +4,7 @@ import fs from "fs";
 import { spawn, spawnSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
 import { GoogleGenAI } from "@google/genai";
 import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction, validateConfigPayload } from "./src/utils/security";
 
@@ -23,6 +24,47 @@ if (!fs.existsSync(WORKSPACE_DIR)) {
 export { assertInsideWorkspace, getSafeWorkspacePath };
 
 app.use(express.json({ limit: "20mb" }));
+
+// ==========================================
+// Rate limiting
+// ==========================================
+// Bounds accidental or abusive request floods against the expensive routes.
+// Limits are deliberately generous: this is a local-first single-user tool, and
+// the UI itself polls (WatchdogMonitor every 2s), so a tight cap would break
+// normal use. Disabled under NODE_ENV=test so the suite is not throttled.
+const RATE_LIMIT_ENABLED = process.env.NODE_ENV !== "test" && process.env.DISABLE_RATE_LIMIT !== "1";
+
+function makeLimiter(windowMs: number, max: number, message: string) {
+  return rateLimit({
+    windowMs,
+    limit: max,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: message },
+    skip: () => !RATE_LIMIT_ENABLED,
+  });
+}
+
+// Reads: generous, the UI polls these.
+const readLimiter = makeLimiter(
+  60_000,
+  600,
+  "Too many read requests. Slow down and retry shortly."
+);
+
+// Writes and deletes: mutate the workspace, so tighter.
+const writeLimiter = makeLimiter(
+  60_000,
+  120,
+  "Too many write requests. Slow down and retry shortly."
+);
+
+// Subprocess/AI-backed work: each call spawns Python and may hit a paid API.
+const expensiveLimiter = makeLimiter(
+  60_000,
+  30,
+  "Too many generation/search requests. Slow down and retry shortly."
+);
 
 // Lazy/Safe Gemini SDK initialization
 let aiClient: GoogleGenAI | null = null;
@@ -135,7 +177,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Config endpoints
-app.get("/api/config", (_req, res) => {
+app.get("/api/config", readLimiter, (_req, res) => {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const data = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
@@ -161,7 +203,7 @@ app.get("/api/config", (_req, res) => {
   });
 });
 
-app.post("/api/config", (req, res) => {
+app.post("/api/config", writeLimiter, (req, res) => {
   try {
     const validated = validateConfigPayload(req.body, process.cwd());
     if (validated.ok !== true) {
@@ -243,7 +285,7 @@ app.get("/api/files", (_req, res) => {
 });
 
 // Read file content
-app.get("/api/files/content", (req, res) => {
+app.get("/api/files/content", readLimiter, (req, res) => {
   try {
     const rel = (req.query.path as string) || "";
     const safePath = getSafeWorkspacePath(rel);
@@ -265,7 +307,7 @@ app.get("/api/files/content", (req, res) => {
 });
 
 // Write / create file
-app.post("/api/files/save", (req, res) => {
+app.post("/api/files/save", writeLimiter, (req, res) => {
   try {
     const { path: rel, content } = req.body;
     if (!rel) return res.status(400).json({ error: "Path required" });
@@ -285,7 +327,7 @@ app.post("/api/files/save", (req, res) => {
 });
 
 // Delete file
-app.delete("/api/files/delete", (req, res) => {
+app.delete("/api/files/delete", writeLimiter, (req, res) => {
   try {
     const rel = (req.query.path as string) || "";
     if (!rel) return res.status(400).json({ error: "Path required" });
@@ -303,7 +345,7 @@ app.delete("/api/files/delete", (req, res) => {
 });
 
 // Audit Log entries
-app.get("/api/audit", (_req, res) => {
+app.get("/api/audit", readLimiter, (_req, res) => {
   try {
     if (!fs.existsSync(AUDIT_LOG_PATH)) {
       return res.json({ records: [] });
@@ -326,12 +368,12 @@ app.get("/api/audit", (_req, res) => {
 });
 
 // Watchdog live events
-app.get("/api/watchdog/events", (_req, res) => {
+app.get("/api/watchdog/events", readLimiter, (_req, res) => {
   res.json({ events: watchdogEvents });
 });
 
 // Run Test Suite
-app.post("/api/tests/run", async (_req, res) => {
+app.post("/api/tests/run", expensiveLimiter, async (_req, res) => {
   const result = await runPythonCommand(["test_file_chat.py", "-v"]);
   const passed = result.code === 0 && (result.stderr.includes("OK") || result.stdout.includes("OK"));
   res.json({
@@ -345,7 +387,7 @@ app.post("/api/tests/run", async (_req, res) => {
 });
 
 // Retrieval Query via Python CLI
-app.post("/api/retrieval/query", async (req, res) => {
+app.post("/api/retrieval/query", expensiveLimiter, async (req, res) => {
   const { query, top_k } = req.body;
   if (!query) return res.status(400).json({ error: "Query is required" });
   
@@ -360,7 +402,7 @@ app.post("/api/retrieval/query", async (req, res) => {
 });
 
 // Diff Preview & Edit Execution
-app.post("/api/edit/preview", async (req, res) => {
+app.post("/api/edit/preview", expensiveLimiter, async (req, res) => {
   const { file, instruction } = req.body;
   if (!file || !instruction) {
     return res.status(400).json({ error: "File and instruction required" });
@@ -431,7 +473,7 @@ Task: Output ONLY the complete revised text of the entire file. Do NOT wrap in m
 });
 
 // Apply Edit
-app.post("/api/edit/apply", async (req, res) => {
+app.post("/api/edit/apply", writeLimiter, async (req, res) => {
   const { file, instruction, customContent } = req.body;
   if (!file) return res.status(400).json({ error: "File required" });
 
@@ -475,7 +517,7 @@ app.post("/api/edit/apply", async (req, res) => {
 });
 
 // Batch Edit
-app.post("/api/edit/batch", async (req, res) => {
+app.post("/api/edit/batch", writeLimiter, async (req, res) => {
   const { instruction, files, dry_run } = req.body;
   if (!instruction) return res.status(400).json({ error: "Instruction required" });
 
@@ -528,7 +570,7 @@ app.post("/api/edit/batch", async (req, res) => {
 });
 
 // Interactive Terminal command runner
-app.post("/api/terminal/exec", async (req, res) => {
+app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
   const { command } = req.body;
   if (!command) return res.status(400).json({ output: "" });
 
@@ -610,7 +652,7 @@ app.post("/api/terminal/exec", async (req, res) => {
 });
 
 // Direct generate helper for internal python tool
-app.post("/api/ai/direct-generate", async (req, res) => {
+app.post("/api/ai/direct-generate", expensiveLimiter, async (req, res) => {
   const { prompt, system } = req.body;
   const ai = getAI();
   if (!ai) {
