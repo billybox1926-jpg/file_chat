@@ -487,7 +487,7 @@ app.get("/api/watchdog/events", readLimiter, (_req, res) => {
 // Run Test Suite
 app.post("/api/tests/run", expensiveLimiter, async (_req, res) => {
   const result = await runPythonCommand(["test_file_chat.py", "-v"]);
-  const passed = result.code === 0 && (result.stderr.includes("OK") || result.stdout.includes("OK"));
+  const passed = result.code === 0;
   res.json({
     passed,
     code: result.code,
