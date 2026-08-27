@@ -773,6 +773,28 @@ app.post("/api/edit/batch", writeLimiter, async (req, res) => {
   res.json({ success: true, results, instruction });
 });
 
+// Tokenize a shell-like string respecting single and double quotes.
+function tokenize(input: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quoteChar: string | null = null;
+  for (const ch of input) {
+    if (quoteChar) {
+      if (ch === quoteChar) quoteChar = null;
+      else current += ch;
+    } else if (ch === '"' || ch === "'") {
+      quoteChar = ch;
+    } else if (/\s/.test(ch)) {
+      if (current) tokens.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
+
 // Interactive Terminal command runner
 app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
   const { command } = req.body;
@@ -784,8 +806,9 @@ app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--query=" + q]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim.startsWith(":edit ")) {
-    const parts = cmdTrim.slice(6).trim().split(" ");
+    const parts = tokenize(cmdTrim.slice(6));
     const f = parts[0];
+    if (!f) return res.status(400).json({ output: "Error: filename required" });
     const safe = getSafeWorkspacePath(f);
     if (!safe) {
       return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
@@ -794,14 +817,15 @@ app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
     const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim.startsWith(":dry-run ")) {
-    const parts = cmdTrim.slice(9).trim().split(" ");
+    const parts = tokenize(cmdTrim.slice(9));
     const f = parts[0];
+    if (!f) return res.status(400).json({ output: "Error: filename required" });
     const safe = getSafeWorkspacePath(f);
     if (!safe) {
       return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
     }
     const instr = parts.slice(1).join(" ");
-    const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr]);
+    const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr, "--dry-run"]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim === ":docs") {
     const files = fs.readdirSync(WORKSPACE_DIR).filter((f) => !f.startsWith("."));
