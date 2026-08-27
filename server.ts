@@ -682,7 +682,14 @@ app.post("/api/edit/batch", writeLimiter, async (req, res) => {
     if (replaceMatch) {
       newContent = originalContent.replaceAll(replaceMatch[0], replaceMatch[1]);
     } else {
-      newContent = `# [Batch updated: ${instruction}]\n` + originalContent;
+      // Without a replace pattern we can't safely transform arbitrary file
+      // types — prepending a comment corrupts JSON/HTML/JSX. Skip this file.
+      results.push({
+        file: f,
+        changed: false,
+        error: "Instruction is not a 'replace X with Y' pattern — batch edit requires an explicit replace instruction.",
+      });
+      continue;
     }
 
     if (!dry_run) {
