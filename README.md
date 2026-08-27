@@ -181,6 +181,18 @@ config.json               Runtime configuration
 
 All filesystem access is confined to `workspace_docs/`. `src/utils/security.ts` rejects parent traversal, URL-encoded and double-encoded escapes, backslash variants, null-byte injection, and symlinks resolving outside the workspace. Never point the workspace at a directory holding secrets — the corpus is fully readable through the API.
 
+### Rate limits
+
+All `/api/*` routes except `/api/health` are rate limited per IP, in three tiers over a 60-second window:
+
+| Tier | Limit | Routes |
+|---|---|---|
+| Read | 600/min | `GET /api/config`, `/api/files`, `/api/files/content`, `/api/audit`, `/api/watchdog/events` |
+| Write | 120/min | `POST /api/config`, `/api/files/save`, `/api/edit/apply`, `/api/edit/batch`, `DELETE /api/files/delete` |
+| Expensive | 30/min | `/api/retrieval/query`, `/api/edit/preview`, `/api/terminal/exec`, `/api/tests/run`, `/api/ai/direct-generate` |
+
+Exceeding a tier returns `429` with a JSON `error`. Responses carry `RateLimit-Policy` and `RateLimit` headers (IETF draft-7). The read tier is deliberately generous because the UI polls `/api/watchdog/events` every 2 seconds. Limits are skipped when `NODE_ENV=test`, and can be disabled with `DISABLE_RATE_LIMIT=1`.
+
 ## License
 
 [MIT](LICENSE) © 2026 Billy Box
