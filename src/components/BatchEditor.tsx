@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { CopyCheck, Sparkles, Check, FileCode, CheckSquare, Square, AlertCircle, ArrowRight } from "lucide-react";
 import { DocumentFile } from "../types";
 
@@ -13,6 +13,11 @@ export default function BatchEditor({ files, onRefreshFiles }: BatchEditorProps)
   const [loading, setLoading] = useState(false);
   const [batchResults, setBatchResults] = useState<any[] | null>(null);
   const [appliedStatus, setAppliedStatus] = useState<string | null>(null);
+
+  // Sync selectedFiles when files prop changes (e.g., after create/delete).
+  useEffect(() => {
+    setSelectedFiles(files.map((f) => f.relativePath));
+  }, [files]);
 
   const toggleSelectAll = () => {
     if (selectedFiles.length === files.length) {

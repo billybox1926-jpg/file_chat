@@ -26,6 +26,13 @@ export default function DocumentExplorer({ files, onRefresh, onSelectForDiff }: 
     }
   }, [selectedPath, files]);
 
+  // Reset selected path when files list changes (e.g., after create/delete).
+  useEffect(() => {
+    if (files.length > 0 && !files.some((f) => f.relativePath === selectedPath)) {
+      setSelectedPath(files[0].relativePath);
+    }
+  }, [files]);
+
   const loadFileContent = async (relPath: string) => {
     if (!relPath) return;
     setLoading(true);
