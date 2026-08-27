@@ -944,6 +944,12 @@ class FileChatCLI:
         
         # Run AI generation or pattern edit
         new_content = self._generate_revised_content(original_content, instruction, prompt, retrieved)
+
+        if new_content is None:
+            return {
+                "success": False,
+                "error": f"Cannot apply instruction '{instruction}': not a 'replace X with Y' pattern and no AI provider is configured. Set GEMINI_API_KEY or use a replace instruction.",
+            }
         
         op = EditOperation(abs_path, original_content, new_content, description=instruction)
         stats = op.stats()
@@ -998,8 +1004,14 @@ class FileChatCLI:
             results.append(res)
         return results
 
-    def _generate_revised_content(self, original: str, instruction: str, prompt: str, retrieved_context: List[Dict[str, Any]]) -> str:
-        """Applies prompt rules or regex/replacement heuristics."""
+    def _generate_revised_content(self, original: str, instruction: str, prompt: str, retrieved_context: List[Dict[str, Any]]) -> str | None:
+        """Applies prompt rules or regex/replacement heuristics.
+
+        Returns the revised content, or None when no transformation could be
+        computed (e.g. instruction is not a replace pattern and there's no AI
+        provider). Returning None signals the caller to report an error rather
+        than silently mutating the file.
+        """
         # Robust heuristic find-and-replace support
         parsed_replace = parse_replace_instruction(instruction)
         if parsed_replace:
@@ -1007,14 +1019,9 @@ class FileChatCLI:
             if target in original:
                 return original.replace(target, replacement)
 
-        # Append or comment instruction heuristic if offline
-        lines = original.splitlines()
-        # Add docstring / updated header note or comment
-        if original.startswith('"""') or original.startswith("/*"):
-            modified = f"# [Updated by FileChat: {instruction}]\n" + original
-        else:
-            modified = original + f"\n\n# Note: {instruction}\n"
-        return modified
+        # No replace pattern matched and no AI provider to generate content.
+        # Don't silently mutate the file — let the caller report an error.
+        return None
 
     def run_interactive_loop(self):
         """Standard CLI REPL when run directly in terminal."""
