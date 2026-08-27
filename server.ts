@@ -532,13 +532,7 @@ app.post("/api/edit/preview", expensiveLimiter, async (req, res) => {
       if (ai) {
         const aiResp = await ai.models.generateContent({
           model: "gemini-3.7-flash",
-          contents: `File Path: ${file}
-
-User Instruction: ${instruction}
-
-Task: Output ONLY the complete revised text of the entire file. Do NOT wrap in markdown backticks or include any introductory/concluding explanations.${buildUntrustedContextBlock(
-            [{ file, score: 1, text: originalContent }]
-          )}`,
+          contents: buildEditPrompt(file, instruction, originalContent),
           config: {
             systemInstruction:
               "You are an expert file editor and code assistant. The existing file content is " +
@@ -831,6 +825,22 @@ async function startServer() {
 
 if (process.env.NODE_ENV !== "test") {
   startServer();
+}
+
+/**
+ * Assembles the Gemini edit-preview prompt. Both the instruction and the
+ * original file content are placed inside the untrusted-data fence so a
+ * malicious instruction cannot elevate itself to a directive.
+ */
+export function buildEditPrompt(file: string, instruction: string, originalContent: string): string {
+  return (
+    `User Request: Edit the file "${file}" according to the instruction below.\n\n` +
+    `Task: Output ONLY the complete revised text of the entire file. Do NOT wrap in markdown backticks or include any introductory/concluding explanations.` +
+    buildUntrustedContextBlock([
+      { file: "[user instruction]", score: 1, text: instruction },
+      { file, score: 1, text: originalContent },
+    ])
+  );
 }
 
 export { app, WORKSPACE_DIR };
