@@ -502,7 +502,7 @@ app.post("/api/retrieval/query", expensiveLimiter, async (req, res) => {
   const { query, top_k } = req.body;
   if (!query) return res.status(400).json({ error: "Query is required" });
   
-  const result = await runPythonCommand(["file_chat.py", "workspace_docs", "--query", query]);
+  const result = await runPythonCommand(["file_chat.py", "workspace_docs", "--query=" + query]);
   try {
     const parsed = JSON.parse(result.stdout);
     res.json({ results: parsed, query });
@@ -699,7 +699,7 @@ app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
   const cmdTrim = command.trim();
   if (cmdTrim.startsWith(":query ")) {
     const q = cmdTrim.slice(7).trim();
-    const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--query", q]);
+    const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--query=" + q]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim.startsWith(":edit ")) {
     const parts = cmdTrim.slice(6).trim().split(" ");
@@ -719,7 +719,7 @@ app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
       return res.status(403).json({ output: "Error: Access denied (file path is outside workspace)" });
     }
     const instr = parts.slice(1).join(" ");
-    const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr, "--dry-run"]);
+    const out = await runPythonCommand(["file_chat.py", "workspace_docs", "--edit", f, instr]);
     return res.json({ output: out.stdout || out.stderr });
   } else if (cmdTrim === ":docs") {
     const files = fs.readdirSync(WORKSPACE_DIR).filter((f) => !f.startsWith("."));
@@ -748,7 +748,7 @@ app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
   if (ai) {
     try {
       // First get top retrieval chunks
-      const queryRes = await runPythonCommand(["file_chat.py", "workspace_docs", "--query", cmdTrim]);
+      const queryRes = await runPythonCommand(["file_chat.py", "workspace_docs", "--query=" + cmdTrim]);
       let contextText = "";
       try {
         const chunks = JSON.parse(queryRes.stdout);
