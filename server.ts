@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { GoogleGenAI } from "@google/genai";
+import { createTwoFilesPatch } from "diff";
 import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction, validateConfigPayload, buildUntrustedContextBlock, CONTEXT_FENCE } from "./src/utils/security";
 
 dotenv.config();
@@ -542,21 +543,31 @@ app.post("/api/edit/preview", expensiveLimiter, async (req, res) => {
         });
         const revised = aiResp.text?.trim() || originalContent;
 
-        // Run python CLI with the result to generate standard unified diff
-        const result = await runPythonCommand([
-          "file_chat.py",
-          "workspace_docs",
-          "--edit",
+        // Compute the diff directly from original vs revised so the diff
+        // always matches new_content. The Python CLI never saw Gemini's
+        // output, so asking it to regenerate the diff produced a mismatch.
+        const diff = createTwoFilesPatch(
+          `a/${file}`,
+          `b/${file}`,
+          originalContent,
+          revised,
+          "",
+          "",
+          { context: 3 }
+        );
+
+        return res.json({
+          success: true,
+          dry_run: true,
           file,
-          instruction,
-          "--dry-run",
-        ]);
-        try {
-          const parsed = JSON.parse(result.stdout);
-          // Enrich with the high quality Gemini generated content
-          parsed.new_content = revised;
-          return res.json(parsed);
-        } catch (e) {}
+          diff,
+          new_content: revised,
+          original_content: originalContent,
+          stats: {
+            additions: diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).length,
+            deletions: diff.split("\n").filter((l) => l.startsWith("-") && !l.startsWith("---")).length,
+          },
+        });
       }
     } catch (err: any) {
       console.log("Gemini edit fallback:", err.message);
