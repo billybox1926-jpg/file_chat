@@ -9,7 +9,7 @@ interface DiffViewerProps {
 }
 
 export default function DiffViewer({ files, selectedFile, onRefreshFiles }: DiffViewerProps) {
-  const [activeFile, setActiveFile] = useState<string>(selectedFile || (files[0]?.name || ""));
+  const [activeFile, setActiveFile] = useState<string>(selectedFile || (files[0]?.relativePath || ""));
   const [instruction, setInstruction] = useState<string>("replace '8080' with '9090'");
   const [diffResult, setDiffResult] = useState<EditResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,7 +20,7 @@ export default function DiffViewer({ files, selectedFile, onRefreshFiles }: Diff
     if (selectedFile) {
       setActiveFile(selectedFile);
     } else if (!activeFile && files.length > 0) {
-      setActiveFile(files[0].name);
+      setActiveFile(files[0].relativePath);
     }
   }, [selectedFile, files]);
 
@@ -150,8 +150,8 @@ export default function DiffViewer({ files, selectedFile, onRefreshFiles }: Diff
               className="w-full bg-[#161B22] border border-[#30363D] text-[#C9D1D9] text-[11px] rounded px-2.5 py-1.5 outline-none focus:border-[#58A6FF]"
             >
               {files.map((f) => (
-                <option key={f.name} value={f.name}>
-                  {f.name} ({f.extension || "doc"})
+                <option key={f.relativePath} value={f.relativePath}>
+                  {f.relativePath} ({f.extension || "doc"})
                 </option>
               ))}
             </select>
