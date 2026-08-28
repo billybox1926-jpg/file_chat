@@ -1186,10 +1186,19 @@ def main():
     cli = FileChatCLI(target_dir=args.directory, config_path=args.config)
 
     if args.test_suite:
-        result = subprocess.run(
-            ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "test_file_chat.py", "-v"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-        )
+        # Try uv first, fall back to python -m pytest
+        import shutil
+        test_cwd = os.path.dirname(os.path.abspath(__file__))
+        if shutil.which("uv"):
+            result = subprocess.run(
+                ["uv", "run", "--with", "pytest", "python", "-m", "pytest", "test_file_chat.py", "-v"],
+                cwd=test_cwd,
+            )
+        else:
+            result = subprocess.run(
+                ["python", "-m", "pytest", "test_file_chat.py", "-v"],
+                cwd=test_cwd,
+            )
         sys.exit(result.returncode)
 
     if args.edit:
