@@ -204,7 +204,12 @@ if (process.env.NODE_ENV !== "test") {
     watcher.on("error", (err) => {
       console.error("Watcher error:", err);
     });
-    watcher.on("all", (eventType, filePath) => {
+    // Debounce handler: rapid file changes (IDE auto-save) coalesce into one event
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingEventType: string | null = null;
+    let pendingFilePath: string | null = null;
+
+    const processEvent = (eventType: string, filePath: string) => {
       if (!filePath) return;
       const filename = path.basename(filePath);
       if (filename.startsWith(".")) return;
@@ -223,6 +228,32 @@ if (process.env.NODE_ENV !== "test") {
       watchdogEvents.unshift(event);
       if (watchdogEvents.length > 100) watchdogEvents.pop();
       persistWatchdogEvent(event);
+    };
+
+    watcher.on("all", (eventType: string, filePath: string) => {
+      // Read debounce interval from config (default 300ms)
+      let debounceMs = 300;
+      try {
+        if (fs.existsSync(CONFIG_PATH)) {
+          const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+          debounceMs = cfg.watch_debounce_ms || 300;
+        }
+      } catch {}
+
+      // Coalesce rapid events for the same file
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      pendingEventType = eventType;
+      pendingFilePath = filePath;
+      debounceTimer = setTimeout(() => {
+        if (pendingEventType && pendingFilePath) {
+          processEvent(pendingEventType, pendingFilePath);
+        }
+        debounceTimer = null;
+        pendingEventType = null;
+        pendingFilePath = null;
+      }, debounceMs);
     });
   } catch (e) {
     console.log("Watch error:", e);
