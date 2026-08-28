@@ -331,6 +331,16 @@ function runPythonCommand(args: string[]): Promise<{ stdout: string; stderr: str
 
 // Reads the confirmation-gate flag fresh each call so toggling it via
 // POST /api/config takes effect without a restart. Defaults to off.
+function getModelFromConfig(): string {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+      if (cfg.model) return cfg.model;
+    }
+  } catch {}
+  return "gemini-2.5-flash";
+}
+
 function requireEditConfirmation(): boolean {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
@@ -365,7 +375,7 @@ app.get("/api/config", readLimiter, (_req, res) => {
   } catch (e) {}
   res.json({
     config: {
-      model: "gemini-3.7-flash",
+      model: getModelFromConfig(),
       ollama_url: "http://localhost:11434",
       provider: "gemini",
       temperature: 0.2,
@@ -639,7 +649,7 @@ app.post("/api/edit/preview", expensiveLimiter, async (req, res) => {
       const ai = getAI();
       if (ai) {
         const aiResp = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
+          model: getModelFromConfig(),
           contents: buildEditPrompt(file, instruction, originalContent),
           config: {
             systemInstruction:
@@ -919,7 +929,7 @@ app.post("/api/terminal/exec", expensiveLimiter, async (req, res) => {
       } catch {}
 
       const resp = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+        model: getModelFromConfig(),
         contents: `User Question: ${cmdTrim}${contextText}`,
         config: {
           systemInstruction:
@@ -950,7 +960,7 @@ app.post("/api/ai/direct-generate", expensiveLimiter, async (req, res) => {
   }
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: getModelFromConfig(),
       contents: prompt,
       config: {
         systemInstruction: system || "You are an expert coding assistant and file editor.",
