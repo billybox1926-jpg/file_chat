@@ -73,4 +73,5 @@ export interface ConfigData {
   watchdog_auto_index: boolean;
   watch_debounce_ms: number;
   retrieval_mode: string;
+  require_edit_confirmation?: boolean;
 }
