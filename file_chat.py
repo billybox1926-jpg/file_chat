@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 file_chat.py - Interactive AI Chat Assistant & File-Editing System
-Combines local document retrieval (FAISS + TF-IDF) with AI generation (Ollama & Gemini),
+Combines local document retrieval (Hybrid TF-IDF + Hash Vectors) with AI generation (Ollama & Gemini),
 diff generation/application, incremental index updates, live watchdog monitoring,
 batch editing, undo/redo history, git commits, and audit logging.
 """
@@ -143,7 +143,7 @@ def chunk_text(text: str, chunk_size: int = 500, chunk_overlap: int = 50) -> Lis
 
 
 # =====================================================================
-# Hybrid Retrieval Engine (TF-IDF + Vector / FAISS + Incremental Updates)
+# Hybrid Retrieval Engine (TF-IDF + Hash Vectors, optional FAISS indexing)
 # =====================================================================
 
 class IncrementalRetrievalEngine:
@@ -315,7 +315,7 @@ class IncrementalRetrievalEngine:
             self.faiss_index = None
 
     def search(self, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
-        """Hybrid search combining TF-IDF lexical matching and vector similarity."""
+        """Hybrid search combining TF-IDF lexical matching and hashed-bag-of-words vector similarity."""
         if not self.chunks:
             return []
             
