@@ -930,6 +930,11 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+    // SPA fallback for client-side routes in dev
+    app.get("*", (_req, res, next) => {
+      if (_req.path.startsWith("/api")) return next();
+      res.sendFile(path.join(process.cwd(), "index.html"));
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
