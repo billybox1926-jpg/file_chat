@@ -148,7 +148,7 @@ export default function WatchdogMonitor({ files, onRefreshFiles }: WatchdogMonit
       <div className="p-3 bg-[#0D1117] border-b border-[#30363D] flex items-center justify-between text-[11px]">
         <div className="flex items-center gap-1.5">
           <span className="text-[#8B949E] font-bold uppercase text-[10px]">Simulate document touch:</span>
-          {files.slice(0, 3).map((f) => (
+          {files.map((f) => (
             <button
               key={f.name}
               onClick={() => simulateFileModification(f.name)}
