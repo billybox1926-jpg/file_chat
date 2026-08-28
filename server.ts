@@ -759,8 +759,19 @@ app.post("/api/edit/apply", writeLimiter, async (req, res) => {
 
 // Batch Edit
 app.post("/api/edit/batch", writeLimiter, async (req, res) => {
-  const { instruction, files, dry_run } = req.body;
+  const { instruction, files, dry_run, confirmed } = req.body;
   if (!instruction) return res.status(400).json({ error: "Instruction required" });
+
+  // Confirmation gate: when require_edit_confirmation is enabled, batch edits
+  // that write to disk must carry confirmed:true — same as /api/edit/apply.
+  if (dry_run !== true && requireEditConfirmation() && confirmed !== true) {
+    return res.status(428).json({
+      success: false,
+      error:
+        "Confirmation required: preview the diff, then resend with confirmed:true. " +
+        "Set require_edit_confirmation:false in config.json to disable this gate.",
+    });
+  }
 
   let targetFiles: string[] = [];
   if (files && Array.isArray(files) && files.length > 0) {
