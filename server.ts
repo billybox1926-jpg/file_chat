@@ -11,6 +11,15 @@ import { createTwoFilesPatch } from "diff";
 import chokidar from "chokidar";
 import { assertInsideWorkspace, getSafeWorkspacePath, parseReplaceInstruction, validateConfigPayload, buildUntrustedContextBlock, CONTEXT_FENCE } from "./src/utils/security";
 
+// Load default config from shared JSON file (single source of truth)
+const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "config.defaults.json");
+let DEFAULT_CONFIG: Record<string, unknown> = {};
+try {
+  if (fs.existsSync(DEFAULT_CONFIG_PATH)) {
+    DEFAULT_CONFIG = JSON.parse(fs.readFileSync(DEFAULT_CONFIG_PATH, "utf-8"));
+  }
+} catch {}
+
 dotenv.config();
 
 const app = express();
@@ -414,19 +423,8 @@ app.get("/api/config", readLimiter, (_req, res) => {
   } catch (e) {}
   res.json({
     config: {
+      ...DEFAULT_CONFIG,
       model: getModelFromConfig(),
-      ollama_url: "http://localhost:11434",
-      provider: "gemini",
-      temperature: 0.2,
-      top_k: 4,
-      chunk_size: 500,
-      chunk_overlap: 50,
-      git_enabled: true,
-      audit_log: "audit.log",
-      session_dir: ".filechat_sessions",
-      watchdog_auto_index: true,
-      watch_debounce_ms: 300,
-      retrieval_mode: "hybrid_tfidf_vector",
     },
   });
 });
