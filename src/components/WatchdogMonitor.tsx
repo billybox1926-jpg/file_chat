@@ -13,9 +13,77 @@ export default function WatchdogMonitor({ files, onRefreshFiles }: WatchdogMonit
   const [simulating, setSimulating] = useState(false);
 
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let errorCount = 0;
+    let hidden = false;
+
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(fetchEvents, 2000);
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      hidden = document.hidden;
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        // Reset error count when tab becomes visible again
+        errorCount = 0;
+        startPolling();
+        fetchEvents();
+      }
+    };
+
+    // Initial fetch + start polling
     fetchEvents();
-    const interval = setInterval(fetchEvents, 2000);
-    return () => clearInterval(interval);
+    if (!document.hidden) {
+      startPolling();
+    }
+
+    // Pause polling when tab is hidden
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Wrap fetchEvents with exponential backoff
+    const originalFetch = fetchEvents;
+    const fetchWithBackoff = async () => {
+      try {
+        await originalFetch();
+        // Success: reset error count
+        errorCount = 0;
+      } catch (e) {
+        errorCount++;
+        // Exponential backoff: 2s, 4s, 8s, 16s, max 32s
+        const backoffMs = Math.min(2000 * Math.pow(2, errorCount - 1), 32000);
+        console.error(`WatchdogMonitor error (count=${errorCount}), backing off ${backoffMs}ms:`, e);
+        // If interval is running, restart with backoff
+        if (interval) {
+          stopPolling();
+          setTimeout(() => {
+            if (!document.hidden) {
+              startPolling();
+            }
+          }, backoffMs);
+        }
+      }
+    };
+
+    // Replace fetchEvents reference in interval
+    if (interval) {
+      clearInterval(interval);
+      interval = setInterval(fetchWithBackoff, 2000);
+    }
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const fetchEvents = async () => {
