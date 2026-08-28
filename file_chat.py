@@ -901,8 +901,11 @@ class FileChatCLI:
         self.ai = AIProvider(self.config)
         
         # Watchdog setup
+        # Use watch_debounce_ms from config (converted to seconds) for polling interval
+        debounce_ms = self.config.get("watch_debounce_ms", 300)
+        polling_interval = debounce_ms / 1000.0
         self.watch_handler = DocumentWatchHandler(self.indexer, self._on_watch_event)
-        self.watcher = PollingWatchdog(self.target_dir, self.watch_handler, interval=1.0)
+        self.watcher = PollingWatchdog(self.target_dir, self.watch_handler, interval=polling_interval)
         if self.config.get("watchdog_auto_index", True):
             self.watcher.start()
 
