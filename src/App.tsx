@@ -86,7 +86,7 @@ export default function App() {
     { id: "retrieval", label: "FAISS + TF-IDF", icon: Layers, badge: "Hybrid", shortcut: "Alt+4" },
     { id: "watchdog", label: "Watchdog Inotify", icon: Activity, badge: "Live", shortcut: "Alt+5" },
     { id: "batch", label: "Batch Editor", icon: CopyCheck, badge: "Multi-File", shortcut: "Alt+6" },
-    { id: "tests", label: "Test Suite", icon: Shield, badge: "8/8 Tests", shortcut: "Alt+7" },
+    { id: "tests", label: "Test Suite", icon: Shield, badge: "Tests", shortcut: "Alt+7" },
     { id: "audit", label: "Audit Logs", icon: History, badge: "audit.log", shortcut: "Alt+8" },
   ] as const;
 
