@@ -165,6 +165,74 @@ export default function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
                   />
                   <span>Enable Automatic Git Commits on Applied Diff Patches</span>
                 </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-[#C9D1D9]">
+                  <input
+                    type="checkbox"
+                    checked={config.require_edit_confirmation || false}
+                    onChange={(e) => setConfig({ ...config, require_edit_confirmation: e.target.checked })}
+                    className="rounded bg-[#161B22] border-[#30363D] text-[#238636] focus:ring-0"
+                  />
+                  <span className="text-[#E3B341]">Require Edit Confirmation (Security Gate)</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-[#8B949E] mb-1">Temperature</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={config.temperature}
+                    onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) || 0.2 })}
+                    className="w-full bg-[#161B22] border border-[#30363D] text-[#E2E8F0] rounded px-2.5 py-1.5 outline-none focus:border-[#58A6FF] font-mono text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-[#8B949E] mb-1">Watch Debounce (ms)</label>
+                  <input
+                    type="number"
+                    value={config.watch_debounce_ms}
+                    onChange={(e) => setConfig({ ...config, watch_debounce_ms: parseInt(e.target.value) || 300 })}
+                    className="w-full bg-[#161B22] border border-[#30363D] text-[#E2E8F0] rounded px-2.5 py-1.5 outline-none focus:border-[#58A6FF] font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-[#8B949E] mb-1">Audit Log Path</label>
+                  <input
+                    type="text"
+                    value={config.audit_log}
+                    onChange={(e) => setConfig({ ...config, audit_log: e.target.value })}
+                    className="w-full bg-[#161B22] border border-[#30363D] text-[#E2E8F0] rounded px-2.5 py-1.5 outline-none focus:border-[#58A6FF] font-mono text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-[#8B949E] mb-1">Session Directory</label>
+                  <input
+                    type="text"
+                    value={config.session_dir}
+                    onChange={(e) => setConfig({ ...config, session_dir: e.target.value })}
+                    className="w-full bg-[#161B22] border border-[#30363D] text-[#E2E8F0] rounded px-2.5 py-1.5 outline-none focus:border-[#58A6FF] font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-[#8B949E] mb-1">Retrieval Mode</label>
+                <select
+                  value={config.retrieval_mode}
+                  onChange={(e) => setConfig({ ...config, retrieval_mode: e.target.value })}
+                  className="w-full bg-[#161B22] border border-[#30363D] text-[#E2E8F0] rounded px-2.5 py-1.5 outline-none focus:border-[#58A6FF] font-mono text-[11px]"
+                >
+                  <option value="hybrid_tfidf_vector">Hybrid TF-IDF + Hash Vectors</option>
+                  <option value="tfidf_only">TF-IDF Only</option>
+                  <option value="vector_only">Hash Vector Only</option>
+                </select>
               </div>
 
               {status && (
