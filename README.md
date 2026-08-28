@@ -20,7 +20,7 @@
 
 </div>
 
-Combines hybrid search (TF-IDF + vector similarity) over a document corpus with diff-based editing, undo/redo, audit logging, and live filesystem watching — available both as a Python CLI/REPL and as a React web workbench.
+Combines hybrid search (TF-IDF + hash vector similarity) over a document corpus with diff-based editing, undo/redo, audit logging, and live filesystem watching — available both as a Python CLI/REPL and as a React web workbench.
 
 - **`file_chat.py`** — the engine and CLI. Indexing, retrieval, diff generation, undo stack, audit log, AI providers.
 - **`server.ts`** — an Express + Vite server that wraps the CLI in a REST API and serves the UI.
@@ -28,7 +28,7 @@ Combines hybrid search (TF-IDF + vector similarity) over a document corpus with 
 
 ## Features
 
-- **Hybrid retrieval** — 60% TF-IDF lexical scoring blended with 40% vector similarity. Uses FAISS when installed, falls back to pure-Python cosine similarity otherwise.
+- **Hybrid retrieval** — 60% TF-IDF lexical scoring blended with 40% hash vector similarity. Uses FAISS when installed, falls back to pure-Python cosine similarity otherwise.
 - **Incremental indexing** — re-indexes a single changed file without rebuilding the whole corpus.
 - **Diff-based edits** — every change is previewable as a unified diff before it touches disk (`--dry-run`).
 - **Undo / redo** — snapshot stack with edits persisted to `.filechat_sessions/snapshots.jsonl`.
@@ -114,7 +114,7 @@ PYTHON_CMD=/usr/bin/python3.12 npm run dev
 | Command | Description |
 |---|---|
 | `:docs` | List indexed files and chunk counts |
-| `:query <text>` | Hybrid TF-IDF + vector search |
+| `:query <text>` | Hybrid TF-IDF + hash vector search |
 | `:edit <file> <instruction>` | Generate a diff and apply it |
 | `:dry-run <file> <instruction>` | Preview a diff without writing |
 | `:undo` | Revert the most recent edit |
