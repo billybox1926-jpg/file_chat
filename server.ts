@@ -562,6 +562,16 @@ app.post("/api/tests/run", expensiveLimiter, async (_req, res) => {
   });
 });
 
+// List test cases dynamically from test_file_chat.py
+app.get("/api/tests/list", readLimiter, async (_req, res) => {
+  const result = await runPythonCommand([
+    "-c",
+    "import unittest, sys; sys.path.insert(0, '.'); from test_file_chat import TestFileChat; loader = unittest.TestLoader(); suite = loader.loadTestsFromTestCase(TestFileChat); print('\n'.join(t._testMethodName for t in suite))",
+  ]);
+  const tests = result.stdout.split('\n').filter((l) => l.trim());
+  res.json({ tests, count: tests.length });
+});
+
 // Retrieval Query via Python CLI
 app.post("/api/retrieval/query", expensiveLimiter, async (req, res) => {
   const { query, top_k } = req.body;
