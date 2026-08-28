@@ -542,6 +542,7 @@ class UndoRedoManager:
         self.undo_stack: List[EditOperation] = []
         self.redo_stack: List[EditOperation] = []
         os.makedirs(self.session_dir, exist_ok=True)
+        self._restore_from_snapshots()
 
     def push_edit(self, op: EditOperation):
         self.undo_stack.append(op)
@@ -575,6 +576,8 @@ class UndoRedoManager:
                 "timestamp": op.timestamp,
                 "file": op.file_path,
                 "description": op.description,
+                "original_content": op.original_content,
+                "new_content": op.new_content,
                 "stats": op.stats(),
                 "diff": op.diff[:500]  # truncate preview for persistence
             }
@@ -582,6 +585,37 @@ class UndoRedoManager:
                 f.write(json.dumps(record) + "\n")
         except Exception as e:
             print(f"[UndoRedoManager] Failed to persist snapshot for {op.file_path}: {e}", file=sys.stderr)
+
+    def _restore_from_snapshots(self):
+        """Restore undo/redo stacks from snapshots.jsonl on startup."""
+        snap_file = os.path.join(self.session_dir, "snapshots.jsonl")
+        if not os.path.exists(snap_file):
+            return
+        try:
+            with open(snap_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                        # New format: has full content
+                        if "original_content" in record and "new_content" in record:
+                            op = EditOperation(
+                                file_path=record["file"],
+                                original_content=record["original_content"],
+                                new_content=record["new_content"],
+                                description=record.get("description", ""),
+                            )
+                            op.timestamp = record.get("timestamp", op.timestamp)
+                            self.undo_stack.append(op)
+                        # Old format: metadata only, can't restore
+                        else:
+                            print(f"[UndoRedoManager] Skipping old-format snapshot for {record.get('file', '?')}", file=sys.stderr)
+                    except (json.JSONDecodeError, KeyError) as e:
+                        print(f"[UndoRedoManager] Skipping corrupt snapshot line: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"[UndoRedoManager] Failed to restore snapshots: {e}", file=sys.stderr)
 
 
 # =====================================================================
