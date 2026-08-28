@@ -580,8 +580,8 @@ class UndoRedoManager:
             }
             with open(snap_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record) + "\n")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[UndoRedoManager] Failed to persist snapshot for {op.file_path}: {e}", file=sys.stderr)
 
 
 # =====================================================================
@@ -602,8 +602,8 @@ class AuditLogger:
         try:
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[AuditLogger] Failed to log audit entry to {self.log_path}: {e}", file=sys.stderr)
 
     def get_recent(self, limit: int = 20) -> List[Dict[str, Any]]:
         if not os.path.exists(self.log_path):
