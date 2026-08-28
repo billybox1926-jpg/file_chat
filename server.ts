@@ -169,6 +169,7 @@ interface WatchEvent {
 }
 const watchdogEvents: WatchEvent[] = [];
 const WATCHDOG_LOG_PATH = path.join(process.cwd(), "watchdog.log");
+const MAX_WATCHDOG_LOG_SIZE = 10 * 1024 * 1024; // 10MB
 
 // Load persisted watchdog events on startup (last 100).
 try {
@@ -185,6 +186,13 @@ try {
 
 function persistWatchdogEvent(event: WatchEvent): void {
   try {
+    // Rotate if log is too large
+    try {
+      const stat = fs.statSync(WATCHDOG_LOG_PATH);
+      if (stat.size > MAX_WATCHDOG_LOG_SIZE) {
+        fs.renameSync(WATCHDOG_LOG_PATH, WATCHDOG_LOG_PATH + ".old");
+      }
+    } catch {}
     fs.appendFileSync(WATCHDOG_LOG_PATH, JSON.stringify(event) + "\n", "utf-8");
   } catch {}
 }
