@@ -252,7 +252,38 @@ function detectPythonCmd(): string {
   return PYTHON_CANDIDATES[0];
 }
 
-const PYTHON_CMD = detectPythonCmd();
+const PYTHON_CMD = detectPythonCommand();
+
+/**
+ * Notifies the Python retrieval engine about a file change so the search
+ * index stays consistent with the filesystem. Spawns a short-lived Python
+ * subprocess that loads the CLI, applies the change, and exits — no
+ * persistent channel needed because this is a local-first single-user tool.
+ *
+ * "op" is one of: "save" (file created/updated), "delete" (file removed).
+ * Failures are logged but never propagated to the caller: an index that is
+ * momentarily stale is strictly better than a failed HTTP request.
+ */
+function notifyIndexChange(relPath: string, op: "save" | "delete"): void {
+  try {
+    const absPath = path.resolve(WORKSPACE_DIR, relPath);
+    const script = `
+import sys, os
+sys.path.insert(0, ${JSON.stringify(process.cwd())})
+from file_chat import FileChatCLI, IncrementalRetrievalEngine
+cli = FileChatCLI(target_dir=${JSON.stringify(WORKSPACE_DIR)}, config_path=${JSON.stringify(CONFIG_PATH)})
+engine = cli.indexer
+if ${JSON.stringify(op)} == "save":
+    engine.add_or_update_file(${JSON.stringify(absPath)})
+else:
+    engine.remove_file(${JSON.stringify(absPath)})
+`;
+    const child = spawn(PYTHON_CMD, ["-c", script], { cwd: process.cwd() });
+    child.on("error", (err) => console.error("[index-sync] spawn failed:", err.message));
+  } catch (e: any) {
+    console.error("[index-sync] failed:", e.message);
+  }
+}
 
 // Helper: run python script with args.
 // Hard-bounded: a hung engine call (slow AI API, blocking read, infinite loop)
@@ -468,6 +499,7 @@ app.post("/api/files/save", writeLimiter, (req, res) => {
       fs.mkdirSync(parentDir, { recursive: true });
     }
     fs.writeFileSync(target, content || "", "utf-8");
+    notifyIndexChange(rel, "save");
     res.json({ success: true, path: rel });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -507,6 +539,7 @@ app.delete("/api/files/delete", writeLimiter, (req, res) => {
     if (fs.existsSync(target)) {
       fs.unlinkSync(target);
     }
+    notifyIndexChange(rel, "delete");
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -691,7 +724,8 @@ app.post("/api/edit/apply", writeLimiter, async (req, res) => {
 
   if (customContent !== undefined && fs.existsSync(safePath)) {
     fs.writeFileSync(safePath, customContent, "utf-8");
-    
+    notifyIndexChange(file, "save");
+
     // Log to audit
     const auditEntry = {
       timestamp: new Date().toISOString(),
