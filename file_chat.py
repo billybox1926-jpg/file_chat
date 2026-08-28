@@ -963,7 +963,10 @@ class FileChatCLI:
         if not os.path.exists(abs_path):
             return {"success": False, "error": f"File '{file_path}' does not exist (searched {abs_path})"}
 
-        original_content = read_file_content(abs_path) or ""
+        content_result = read_file_content(abs_path)
+        if content_result is None:
+            return {"success": False, "error": f"File '{file_path}' exists but could not be read (permissions, encoding, or locked)"}
+        original_content = content_result
         
         # Retrieve context relevant to this edit instruction
         retrieved = self.indexer.search(f"{file_path} {instruction}", top_k=3)
