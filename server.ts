@@ -337,7 +337,7 @@ else:
 // Hard-bounded: a hung engine call (slow AI API, blocking read, infinite loop)
 // would otherwise hold the HTTP request open forever and leak an orphaned
 // process. On timeout the child is killed and the caller gets a real error.
-const PYTHON_TIMEOUT_MS = Number(process.env.PYTHON_TIMEOUT_MS) || 60_000;
+const PYTHON_TIMEOUT_MS = Number(process.env.PYTHON_TIMEOUT_MS) || 300_000;
 
 function runPythonCommand(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
