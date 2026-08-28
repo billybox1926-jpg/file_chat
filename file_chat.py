@@ -48,21 +48,30 @@ except ImportError:
     HAS_PYPDF = False
 
 
-DEFAULT_CONFIG = {
-    "model": "gemini-2.5-flash",
-    "ollama_url": "http://localhost:11434",
-    "provider": "gemini",  # "gemini", "ollama", or "offline"
-    "temperature": 0.2,
-    "top_k": 4,
-    "chunk_size": 500,
-    "chunk_overlap": 50,
-    "git_enabled": False,
-    "audit_log": "audit.log",
-    "session_dir": ".filechat_sessions",
-    "watchdog_auto_index": True,
-    "watch_debounce_ms": 300,
-    "retrieval_mode": "hybrid_tfidf_vector"
-}
+# Load default config from shared JSON file (single source of truth)
+import json as _json
+import os as _os
+_DEFAULT_CONFIG_PATH = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "config.defaults.json")
+try:
+    with open(_DEFAULT_CONFIG_PATH, "r", encoding="utf-8") as _f:
+        DEFAULT_CONFIG: Dict[str, Any] = _json.load(_f)
+except Exception:
+    # Fallback if file not found
+    DEFAULT_CONFIG = {
+        "model": "gemini-2.5-flash",
+        "ollama_url": "http://localhost:11434",
+        "provider": "gemini",
+        "temperature": 0.2,
+        "top_k": 4,
+        "chunk_size": 500,
+        "chunk_overlap": 50,
+        "git_enabled": False,
+        "audit_log": "audit.log",
+        "session_dir": ".filechat_sessions",
+        "watchdog_auto_index": True,
+        "watch_debounce_ms": 300,
+        "retrieval_mode": "hybrid_tfidf_vector"
+    }
 
 
 # =====================================================================
