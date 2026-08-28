@@ -47,7 +47,7 @@ export default function RetrievalExplorer() {
           </div>
           <div>
             <h2 className="text-[11px] font-bold text-[#C9D1D9] uppercase tracking-wider">
-              Retrieval Index &amp; Hybrid Semantic Search
+              Retrieval Index &amp; Hybrid Lexical Search
             </h2>
           </div>
         </div>
@@ -105,7 +105,7 @@ export default function RetrievalExplorer() {
         {loading ? (
           <div className="flex flex-col items-center justify-center h-48 text-[#8B949E] gap-2">
             <Sparkles className="w-5 h-5 text-[#58A6FF] animate-spin" />
-            <p className="text-[11px]">Computing TF-IDF cosine similarity &amp; FAISS dot products...</p>
+            <p className="text-[11px]">Computing TF-IDF cosine similarity &amp; hash vector scores...</p>
           </div>
         ) : results.length > 0 ? (
           results.map((r, idx) => (
@@ -131,7 +131,7 @@ export default function RetrievalExplorer() {
                     TF-IDF: {(r.tfidf * 100).toFixed(0)}%
                   </span>
                   <span className="px-1.5 py-0.5 bg-[#21262D] text-[#8B949E] rounded border border-[#30363D]">
-                    FAISS: {(r.vector * 100).toFixed(0)}%
+                    Hash Vec: {(r.vector * 100).toFixed(0)}%
                   </span>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 {
   "name": "FileChat Studio",
-  "description": "Interactive CLI and visual workbench for file_chat.py with document retrieval (FAISS + TF-IDF), batch diffs, Ollama & Gemini engines, undo/git integration, and live watchdog updates.",
+  "description": "Interactive CLI and visual workbench for file_chat.py with document retrieval (Hybrid TF-IDF + Hash Vectors), batch diffs, Ollama & Gemini engines, undo/git integration, and live watchdog updates.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

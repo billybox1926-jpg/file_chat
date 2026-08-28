@@ -83,7 +83,7 @@ export default function App() {
     { id: "terminal", label: "Interactive CLI", icon: Terminal, badge: "--interactive", shortcut: "Alt+1" },
     { id: "diff", label: "Diff Inspector", icon: FileCode, badge: "Dry-Run / Apply", shortcut: "Alt+2" },
     { id: "explorer", label: "Documents", icon: FolderOpen, badge: `${files.length} files`, shortcut: "Alt+3" },
-    { id: "retrieval", label: "FAISS + TF-IDF", icon: Layers, badge: "Hybrid", shortcut: "Alt+4" },
+    { id: "retrieval", label: "Hybrid Index", icon: Layers, badge: "Hybrid", shortcut: "Alt+4" },
     { id: "watchdog", label: "Watchdog Inotify", icon: Activity, badge: "Live", shortcut: "Alt+5" },
     { id: "batch", label: "Batch Editor", icon: CopyCheck, badge: "Multi-File", shortcut: "Alt+6" },
     { id: "tests", label: "Test Suite", icon: Shield, badge: "Tests", shortcut: "Alt+7" },
@@ -121,7 +121,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#7D8590]">
             <span>CONFIG: <span className="text-[#58A6FF]">config.json</span></span>
-            <span>INDEX: <span className="text-[#238636]">HYBRID_FAISS</span></span>
+            <span>INDEX: <span className="text-[#238636]">HYBRID</span></span>
             <span>WATCHDOG: <span className="text-[#238636]">ACTIVE</span></span>
           </div>
 
