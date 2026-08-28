@@ -1058,12 +1058,13 @@ if (process.env.NODE_ENV !== "test") {
  */
 export function buildEditPrompt(file: string, instruction: string, originalContent: string): string {
   return (
-    `User Request: Edit the file "${file}" according to this instruction:\n${instruction}\n\n` +
+    `User Request: Edit the file "${file}" according to the instruction below.\n\n` +
     `Task: Output ONLY the complete revised text of the entire file. Do NOT wrap in markdown backticks or include any introductory/concluding explanations.` +
     buildUntrustedContextBlock([
+      { file: "[user instruction]", score: 1, text: instruction },
       { file, score: 1, text: originalContent },
     ])
   );
-}
+}}
 
 export { app, WORKSPACE_DIR };
