@@ -456,6 +456,7 @@ app.post("/api/config", writeLimiter, (req, res) => {
 // is partial rather than silently short.
 const FILE_SCAN_MAX_ENTRIES = 5000;
 const FILE_SCAN_MAX_DEPTH = 12;
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
 
 app.get("/api/files", readLimiter, (_req, res) => {
   try {
@@ -518,6 +519,9 @@ app.get("/api/files/content", readLimiter, (req, res) => {
     if (stat.isDirectory()) {
       return res.status(400).json({ error: "Cannot read directory as file" });
     }
+    if (stat.size > MAX_FILE_SIZE_BYTES) {
+      return res.status(413).json({ error: "File too large. Max size is 50MB." });
+    }
     const content = fs.readFileSync(safePath, "utf-8");
     res.json({ content, path: rel });
   } catch (e: any) {
@@ -537,6 +541,9 @@ app.post("/api/files/save", writeLimiter, (req, res) => {
     const parentDir = path.dirname(target);
     if (!fs.existsSync(parentDir)) {
       fs.mkdirSync(parentDir, { recursive: true });
+    }
+    if (content && content.length > MAX_FILE_SIZE_BYTES) {
+      return res.status(413).json({ error: "File too large. Max size is 50MB." });
     }
     fs.writeFileSync(target, content || "", "utf-8");
     notifyIndexChange(rel, "save");
