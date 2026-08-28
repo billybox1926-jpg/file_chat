@@ -300,7 +300,7 @@ function detectPythonCmd(): string {
   return PYTHON_CANDIDATES[0];
 }
 
-const PYTHON_CMD = detectPythonCommand();
+const PYTHON_CMD = detectPythonCmd();
 
 /**
  * Notifies the Python retrieval engine about a file change so the search
