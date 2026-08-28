@@ -49,7 +49,7 @@ except ImportError:
 
 
 DEFAULT_CONFIG = {
-    "model": "gemini-3.7-flash",
+    "model": "gemini-2.5-flash",
     "ollama_url": "http://localhost:11434",
     "provider": "gemini",  # "gemini", "ollama", or "offline"
     "temperature": 0.2,
@@ -367,7 +367,7 @@ class IncrementalRetrievalEngine:
             norm_vec = vector_scores[idx] / max_vec if max_vec > 0 else 0
             hybrid_score = (0.6 * norm_tfidf) + (0.4 * norm_vec)
             
-            if hybrid_score > 0.01 or (idx < top_k and not q_tokens):
+            if hybrid_score > 0.01:
                 combined.append({
                     "chunk": chunk,
                     "score": round(hybrid_score, 4),
@@ -723,7 +723,7 @@ class AIProvider:
         self.config = config
         self.provider = config.get("provider", "gemini")
         self.ollama_url = config.get("ollama_url", "http://localhost:11434")
-        self.model = config.get("model", "gemini-3.7-flash")
+        self.model = config.get("model", "gemini-2.5-flash")
 
     def generate(self, prompt: str, system: Optional[str] = None, context_chunks: Optional[List[Dict[str, Any]]] = None) -> str:
         """Sends generation request to configured provider.
@@ -1011,7 +1011,7 @@ class FileChatCLI:
             
             git_msg = ""
             if self.config.get("git_enabled", False):
-                git_ok, git_out = execute_git_commit(abs_path, f"FileChat: {instruction}")
+                git_ok, git_out = execute_git_commit(abs_path, f"FileChat: {instruction}".replace("\n", " "))
                 git_msg = f" (Git: {git_out})" if git_ok else ""
 
             return {

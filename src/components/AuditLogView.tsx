@@ -67,7 +67,7 @@ export default function AuditLogView() {
                     {rec.action || "EVENT"}
                   </span>
                   <span className="text-[#E2E8F0] font-bold">
-                    {rec.file ? rec.file.replace(/.*\/workspace_docs\//, "") : "system"}
+                    {rec.file ? rec.file.split("workspace_docs").pop()?.replace(/^[\\/]*/, "") || rec.file : "system"}
                   </span>
                 </div>
                 <span className="text-[#7D8590] text-[10px] flex items-center gap-1">

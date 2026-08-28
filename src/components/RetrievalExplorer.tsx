@@ -119,7 +119,7 @@ export default function RetrievalExplorer() {
                     {idx + 1}
                   </span>
                   <span className="text-[11px] font-mono font-bold text-[#C9D1D9] truncate">
-                    {r.file.replace(/.*\/workspace_docs\//, "")}
+                    {r.file.split("workspace_docs").pop()?.replace(/^[\\/]*/, "") || r.file}
                   </span>
                 </div>
                 {/* Score Pills */}

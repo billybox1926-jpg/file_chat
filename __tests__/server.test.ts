@@ -97,14 +97,12 @@ describe("Workspace Directory Traversal & Security Tests", () => {
     for (const payload of encodedPayloads) {
       const res = await fetch(`${baseUrl}/api/files/content?path=${payload}`);
       assert.equal(
-        res.status === 403 || res.status === 404,
-        true,
-        `Expected 403 or 404 for ${payload}, got ${res.status}`
+        res.status,
+        403,
+        `Expected 403 for ${payload}, got ${res.status}`
       );
-      if (res.status === 403) {
-        const data = (await res.json()) as { error: string };
-        assert.equal(data.error, "Access denied");
-      }
+      const data = (await res.json()) as { error: string };
+      assert.equal(data.error, "Access denied");
     }
   });
 
