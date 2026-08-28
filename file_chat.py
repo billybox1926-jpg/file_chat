@@ -56,7 +56,7 @@ DEFAULT_CONFIG = {
     "top_k": 4,
     "chunk_size": 500,
     "chunk_overlap": 50,
-    "git_enabled": True,
+    "git_enabled": False,
     "audit_log": "audit.log",
     "session_dir": ".filechat_sessions",
     "watchdog_auto_index": True,
