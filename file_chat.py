@@ -585,6 +585,7 @@ class UndoRedoManager:
             }
             with open(snap_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record) + "\n")
+            _trim_log(snap_file)
         except Exception as e:
             print(f"[UndoRedoManager] Failed to persist snapshot for {op.file_path}: {e}", file=sys.stderr)
 
@@ -624,6 +625,17 @@ class UndoRedoManager:
 # Audit Logger & Git Integration
 # =====================================================================
 
+def _trim_log(log_path: str, max_lines: int = MAX_LOG_LINES) -> None:
+    """Trim a log file to the last max_lines lines."""
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        if len(lines) > max_lines:
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.writelines(lines[-max_lines:])
+    except Exception:
+        pass
+
 class AuditLogger:
     def __init__(self, log_path: str = "audit.log"):
         self.log_path = log_path
@@ -638,6 +650,7 @@ class AuditLogger:
         try:
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
+            _trim_log(self.log_path)
         except Exception as e:
             print(f"[AuditLogger] Failed to log audit entry to {self.log_path}: {e}", file=sys.stderr)
 
