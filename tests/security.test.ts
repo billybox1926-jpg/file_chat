@@ -26,14 +26,10 @@ describe("Security Unit Tests - assertInsideWorkspace Utility", () => {
     // Create symlink pointing to an external file (e.g. package.json in parent directory)
     const targetOutside = path.resolve(process.cwd(), "package.json");
     const symlinkPath = path.join(testWorkspaceDir, symlinkEscapingFile);
-    try {
-      if (fs.existsSync(symlinkPath)) {
-        fs.unlinkSync(symlinkPath);
-      }
-      fs.symlinkSync(targetOutside, symlinkPath);
-    } catch {
-      // Symlinks may require elevated permissions on some environments
+    if (fs.existsSync(symlinkPath)) {
+      fs.unlinkSync(symlinkPath);
     }
+    fs.symlinkSync(targetOutside, symlinkPath);
   });
 
   after(() => {
@@ -159,12 +155,10 @@ describe("Security Unit Tests - assertInsideWorkspace Utility", () => {
   describe("Symlink Traversal Prevention", () => {
     test("rejects symlink pointing outside the workspace sandbox", () => {
       const symlinkPath = path.join(testWorkspaceDir, symlinkEscapingFile);
-      if (fs.existsSync(symlinkPath)) {
-        assert.throws(
-          () => assertInsideWorkspace(symlinkEscapingFile, testWorkspaceDir),
-          /Access denied/
-        );
-      }
+      assert.throws(
+        () => assertInsideWorkspace(symlinkEscapingFile, testWorkspaceDir),
+        /Access denied/
+      );
     });
   });
 
