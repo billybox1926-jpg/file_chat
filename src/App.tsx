@@ -227,7 +227,7 @@ export default function App() {
             </div>
             <div className="flex items-center justify-between text-[#7D8590]">
               <span>Git Status:</span>
-              <span className="text-[#E3B341] font-bold">main*</span>
+              <span className="text-[#7D8590] font-bold">--</span>
             </div>
           </div>
         </aside>
