@@ -21,6 +21,8 @@ import urllib.request
 import urllib.error
 from typing import List, Dict, Any, Optional, Tuple, Set
 
+MAX_LOG_LINES = 10000
+
 # Graceful fallback for optional packages
 try:
     import numpy as np
