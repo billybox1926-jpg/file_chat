@@ -811,75 +811,62 @@ def parse_replace_instruction(instruction: str) -> Optional[Tuple[str, str]]:
     """
     Parses a replacement instruction of the form:
       replace <target> with <replacement> [optional trailing text]
-    Uses robust string splitting and quote extraction (non-regex method)
-    to handle target strings containing the word 'with', quotes, and trailing text.
+
+    Uses word-boundary regex (matching src/utils/security.ts) so the CLI
+    and web paths never silently disagree.
     """
     if not instruction or not isinstance(instruction, str):
         return None
     instr = instruction.strip()
-    if not instr.lower().startswith("replace "):
+    if not re.match(r"^replace\b", instr, re.IGNORECASE):
         return None
 
-    rest = instr[8:].strip()
+    rest = instr[7:].strip()
     if not rest:
         return None
 
     target = ""
     after_target = ""
 
-    # Check if target is enclosed in quotes (' or ")
+    # Case 1: Quoted target
     if rest.startswith("'") or rest.startswith('"'):
-        quote_char = rest[0]
-        closing_quote = rest.find(quote_char, 1)
-        if closing_quote != -1:
-            target = rest[1:closing_quote]
-            after_target = rest[closing_quote + 1:].strip()
-        else:
-            return None
-    else:
-        # Non-quoted target: find the separator keyword " with "
-        lower_rest = rest.lower()
-        with_idx = lower_rest.find(" with ")
-        if with_idx == -1:
-            return None
-        target = rest[:with_idx].strip().strip("'\"")
-        after_target = rest[with_idx:].strip()
-
-    # Verify after_target starts with 'with' keyword
-    if not after_target.lower().startswith("with"):
+        q = rest[0]
+        end_idx = rest.find(q, 1)
+        if end_idx != -1:
+            target = rest[1:end_idx]
+            after_target = rest[end_idx + 1:].strip()
+            with_match = re.match(r"^with\b\s*", after_target, re.IGNORECASE)
+            if with_match:
+                after_with = after_target[with_match.end():].strip()
+                if after_with.startswith("'") or after_with.startswith('"'):
+                    rq = after_with[0]
+                    rend_idx = after_with.find(rq, 1)
+                    replacement = after_with[1:rend_idx] if rend_idx != -1 else after_with[1:]
+                    return (target, replacement)
+                else:
+                    parts = re.split(r"\s+(?:and|then|where|in|on|to)\s+", after_with, flags=re.IGNORECASE)
+                    return (target, parts[0].strip().strip("'\""))
         return None
 
-    after_with = after_target[4:].strip()
-    if not after_with:
+    # Case 2: Unquoted target — use word-boundary regex (matches TypeScript)
+    with_match = re.search(r"\bwith\b", rest, re.IGNORECASE)
+    if not with_match:
         return None
-
-    replacement = ""
-    # Check if replacement is quoted
+    target = rest[:with_match.start()].strip().strip("'\"")
+    if not target:
+        return None
+    after_with = rest[with_match.end():].strip()
     if after_with.startswith("'") or after_with.startswith('"'):
-        q = after_with[0]
-        end_q = after_with.find(q, 1)
-        if end_q != -1:
-            replacement = after_with[1:end_q]
-        else:
-            replacement = after_with[1:]
+        rq = after_with[0]
+        rend_idx = after_with.find(rq, 1)
+        replacement = after_with[1:rend_idx] if rend_idx != -1 else after_with[1:]
+        return (target, replacement)
     else:
-        # Non-quoted replacement: strip out trailing conjunctions/notes.
-        # Must match the stop-word set in src/utils/security.ts exactly so
-        # the CLI and web paths never silently disagree.
-        tokens = after_with.split()
-        clean_tokens = []
-        for token in tokens:
-            if token.lower() in ("and", "then", "where", "in", "on", "to"):
-                break
-            clean_tokens.append(token)
-        if clean_tokens:
-            replacement = " ".join(clean_tokens).strip().strip("'\"")
-        else:
-            replacement = after_with.strip().strip("'\"")
-
-    if target:
-        return target, replacement
-    return None
+        parts = re.split(r"\s+(?:and|then|where|in|on|to)\s+", after_with, flags=re.IGNORECASE)
+        replacement = parts[0].strip().strip("'\"")
+        if not replacement:
+            return None
+        return (target, replacement)
 
 
 class FileChatCLI:
