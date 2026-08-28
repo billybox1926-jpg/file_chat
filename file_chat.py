@@ -391,6 +391,8 @@ class IncrementalRetrievalEngine:
             if any(part.startswith(".") for part in root.split(os.sep)):
                 continue
             for f in files:
+                if f.startswith("."):
+                    continue
                 ext = os.path.splitext(f)[1].lower()
                 if ext in extensions:
                     full_path = os.path.join(root, f)
