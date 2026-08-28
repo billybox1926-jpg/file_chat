@@ -1065,6 +1065,6 @@ export function buildEditPrompt(file: string, instruction: string, originalConte
       { file, score: 1, text: originalContent },
     ])
   );
-}}
+}
 
 export { app, WORKSPACE_DIR };
