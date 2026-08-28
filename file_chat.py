@@ -1182,8 +1182,12 @@ def main():
     parser.add_argument("--test-suite", action="store_true", help="Run internal self-tests")
     args = parser.parse_args()
 
-    # Ensure sample target directory exists
-    if not os.path.exists(args.directory):
+    # Only create the directory if it's the default (workspace_docs).
+    # If user explicitly provided a non-existent path, raise an error.
+    if args.directory != "workspace_docs":
+        if not os.path.exists(args.directory):
+            parser.error(f"Directory '{args.directory}' does not exist. Create it first or use the default 'workspace_docs'.")
+    elif not os.path.exists(args.directory):
         os.makedirs(args.directory, exist_ok=True)
 
     cli = FileChatCLI(target_dir=args.directory, config_path=args.config)
