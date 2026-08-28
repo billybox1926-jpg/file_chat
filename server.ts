@@ -457,7 +457,6 @@ app.get("/api/files", readLimiter, (_req, res) => {
           files.push({
             name: ent.name,
             relativePath: rel,
-            fullPath: full,
             size: stat.size,
             mtime: stat.mtimeMs,
             modifiedDate: stat.mtime.toLocaleString(),
