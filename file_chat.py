@@ -673,13 +673,15 @@ class AuditLogger:
 def execute_git_commit(file_path: str, message: str) -> Tuple[bool, str]:
     """Stages and commits file if git repository is present."""
     try:
+        # Use the file's directory as cwd so git operations target the correct repo
+        file_dir = os.path.dirname(file_path)
         # Check if git repo exists
-        check = subprocess.run(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        check = subprocess.run(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=file_dir)
         if check.returncode != 0:
             return False, "Not a git repository"
             
-        subprocess.run(["git", "add", file_path], check=True)
-        commit_res = subprocess.run(["git", "commit", "-m", message], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        subprocess.run(["git", "add", file_path], check=True, cwd=file_dir)
+        commit_res = subprocess.run(["git", "commit", "-m", message], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=file_dir)
         return True, commit_res.stdout.strip()
     except Exception as e:
         return False, str(e)
